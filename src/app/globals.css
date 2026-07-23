@@ -1,0 +1,502 @@
+@import "tailwindcss";
+
+/*
+ * Paleta do Build Money, medida do PDF da marca (scripts/medir-simbolo.ts e
+ * scripts/paleta.ts) — nenhum valor aqui foi estimado no olho.
+ *
+ *   teal    #1b7c77  ->  oklch(53.2% 0.085 189.6)   "verde profundo: solidez"
+ *   dourado #c8a235  ->  oklch(72.8% 0.130  88.9)   "dourado: conquista"
+ *   creme   #f6f5f1 / #eeebe4                        fundos da identidade
+ *
+ * O que a medição de contraste (WCAG) determinou:
+ *
+ * - O teal da marca dá 5.00:1 sobre branco e 4.59:1 sobre o creme: passa AA
+ *   como texto e como preenchimento com branco por cima. Usado direto.
+ * - O dourado dá 2.42:1 sobre branco — REPROVA como texto no tema claro. Ele
+ *   é preenchimento, com texto escuro por cima (8.68:1). No tema escuro
+ *   alcança 7.40:1 e aí sim pode ser texto.
+ * - Teal (189.6°) e o verde de receita ficavam a 40.4°, no limite em que o
+ *   olho funde as cores. O verde foi deslocado para 143° (~47° de distância)
+ *   para que "cor da marca" e "entrou dinheiro" não se confundam.
+ *
+ * Os fundos são neutros QUENTES (matiz ~85°), seguindo o creme da
+ * identidade. Um cinza-azulado frio brigaria com o dourado.
+ */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  /* Cores cruas da marca — usadas pela logo, que não muda com o tema. */
+  --brand-teal: oklch(53.2% 0.085 189.6);
+  --brand-teal-deep: oklch(38% 0.07 189.6);
+  --brand-gold: oklch(72.8% 0.13 88.9);
+
+  /* Fundo dourado bem claro; os cards vêm quase brancos por cima, para saltar. */
+  --background: oklch(96% 0.038 92);
+  --surface: oklch(99.2% 0.012 92);
+  --surface-muted: oklch(93.5% 0.032 92);
+  --border: oklch(88.5% 0.03 92);
+  --border-strong: oklch(80.5% 0.035 92);
+
+  /* Texto: quase-preto quente, casando com o dourado do fundo. */
+  --foreground: oklch(24% 0.02 82);
+  --muted-foreground: oklch(50% 0.022 85);
+
+  /* Marca aplicada */
+  --primary: oklch(53.2% 0.085 189.6); /* o teal da marca: 5.00:1 com branco */
+  --primary-hover: oklch(46% 0.085 189.6);
+  --primary-foreground: oklch(100% 0 0);
+  --primary-text: oklch(48% 0.085 189.6); /* levemente escurecido para links */
+  --primary-subtle: oklch(95.5% 0.022 189.6);
+  --primary-border: oklch(88% 0.045 189.6);
+
+  /* Dourado = conquista. Preenchimento no claro, nunca texto. */
+  --xp: oklch(72.8% 0.13 88.9);
+  --xp-foreground: oklch(24% 0.04 88.9); /* texto sobre dourado: 8.68:1 */
+  --xp-text: oklch(50% 0.11 88.9); /* dourado escurecido, quando precisa ser texto */
+  --xp-subtle: oklch(95% 0.04 88.9);
+  --xp-border: oklch(85% 0.09 88.9);
+
+  /* Semântica financeira — verde afastado do teal da marca */
+  --income: oklch(50% 0.14 143);
+  --income-subtle: oklch(95% 0.04 143);
+  --expense: oklch(52% 0.19 25);
+  --expense-subtle: oklch(95.5% 0.03 25);
+
+  /*
+   * Cores dos GRÁFICOS. Separadas das de texto porque o validador do sistema
+   * de design exige faixas próprias: no claro L 0.43–0.77, no escuro L
+   * 0.48–0.67 (marcas claras demais ofuscam sobre fundo escuro).
+   *
+   * Verde x vermelho REPROVOU: para deuteranopia a separação era ΔE 3.8,
+   * abaixo do mínimo de 8 — ~8% dos homens não distinguiriam receita de
+   * despesa. Trocado por teal x vermelho, que dá ΔE 11.6.
+   */
+  --chart-income: #008a7c;
+  --chart-expense: #be222a;
+  --chart-grid: oklch(90% 0.025 92);
+
+  --warning: oklch(58% 0.14 65);
+  --ring: oklch(53.2% 0.085 189.6);
+
+  --radius: 0.875rem;
+
+  /*
+   * Acentos por seção — cada área do app ganha identidade de cor. Usados nos
+   * cards do painel (com gradiente) e nos cabeçalhos de seção. Escolhidos com
+   * matizes bem separados para o olho distinguir de relance.
+   */
+  --accent-wealth: oklch(56% 0.11 190);   /* teal — patrimônio */
+  --accent-wealth-2: oklch(64% 0.13 165); /* verde-água, par do gradiente */
+  --accent-cash: oklch(58% 0.15 250);     /* azul — caixa/contas */
+  --accent-cash-2: oklch(62% 0.16 285);   /* índigo, par */
+  --accent-budget: oklch(56% 0.17 300);   /* violeta — orçamento */
+  --accent-budget-2: oklch(60% 0.19 330); /* magenta, par */
+  --accent-goal: oklch(72.8% 0.13 88.9);  /* dourado — metas */
+  --accent-goal-2: oklch(70% 0.15 55);    /* âmbar, par */
+  --accent-split: oklch(62% 0.16 20);     /* coral — rachas */
+  --accent-split-2: oklch(66% 0.15 35);   /* laranja, par */
+  --accent-streak: oklch(64% 0.19 40);    /* laranja-fogo — sequência */
+  --accent-streak-2: oklch(60% 0.2 25);   /* vermelho quente, par */
+
+  /* Texto sobre gradientes de acento (todos escuros o bastante p/ branco). */
+  --accent-on: oklch(100% 0 0);
+
+  /*
+   * Menu (barra lateral) no teal da marca, com texto branco por cima. Os
+   * estados (ativo/hover/borda) são véus de branco, para ficarem no tom sem
+   * precisar de mais cores. Iguais nos dois temas — o teal é da identidade.
+   */
+  --sidebar-1: oklch(53% 0.085 189.6);
+  --sidebar-2: oklch(43% 0.075 189.6);
+  --sidebar-fg: oklch(99% 0.005 189.6);
+  --sidebar-fg-muted: color-mix(in oklab, white 70%, transparent);
+  --sidebar-hover: color-mix(in oklab, white 13%, transparent);
+  --sidebar-active: color-mix(in oklab, white 22%, transparent);
+  --sidebar-border: color-mix(in oklab, white 16%, transparent);
+}
+
+.dark {
+  /* Chumbo (grafite): cinza escuro levemente frio. Os cards sobem um tom. */
+  --background: oklch(26% 0.006 255);
+  --surface: oklch(31% 0.007 255);
+  --surface-muted: oklch(36% 0.008 255);
+  --border: oklch(41% 0.01 255);
+  --border-strong: oklch(49% 0.012 255);
+
+  --foreground: oklch(95% 0.004 255);
+  --muted-foreground: oklch(73% 0.009 255);
+
+  /* O teal da marca só dá 3.58:1 sobre a superfície escura; precisa clarear. */
+  --primary: oklch(70% 0.1 189.6);
+  --primary-hover: oklch(76% 0.1 189.6);
+  --primary-foreground: oklch(16.5% 0.02 189.6);
+  --primary-text: oklch(74% 0.1 189.6);
+  --primary-subtle: oklch(29% 0.045 189.6);
+  --primary-border: oklch(37% 0.06 189.6);
+
+  /* Aqui o dourado da marca funciona como texto: 7.40:1. */
+  --xp: oklch(72.8% 0.13 88.9);
+  --xp-foreground: oklch(19% 0.03 88.9);
+  --xp-text: oklch(79% 0.12 88.9);
+  --xp-subtle: oklch(29% 0.05 88.9);
+  --xp-border: oklch(39% 0.07 88.9);
+
+  --income: oklch(74% 0.15 143);
+  --income-subtle: oklch(27.5% 0.05 143);
+  --expense: oklch(70% 0.17 25);
+  --expense-subtle: oklch(27.5% 0.05 25);
+
+  --chart-income: #00a697;
+  --chart-expense: #de4e4b;
+  --chart-grid: oklch(40% 0.01 255);
+
+  --warning: oklch(78% 0.14 65);
+  --ring: oklch(70% 0.1 189.6);
+
+  /* Acentos um tom mais claros no escuro, para brilharem sobre a superfície. */
+  --accent-wealth: oklch(66% 0.11 190);
+  --accent-wealth-2: oklch(72% 0.13 165);
+  --accent-cash: oklch(66% 0.14 250);
+  --accent-cash-2: oklch(68% 0.15 285);
+  --accent-budget: oklch(64% 0.16 300);
+  --accent-budget-2: oklch(68% 0.18 330);
+  --accent-goal: oklch(76% 0.13 88.9);
+  --accent-goal-2: oklch(74% 0.15 55);
+  --accent-split: oklch(68% 0.16 20);
+  --accent-split-2: oklch(72% 0.15 35);
+  --accent-streak: oklch(70% 0.18 40);
+  --accent-streak-2: oklch(66% 0.2 25);
+  --accent-on: oklch(100% 0 0);
+}
+
+@theme inline {
+  --color-brand-teal: var(--brand-teal);
+  --color-brand-teal-deep: var(--brand-teal-deep);
+  --color-brand-gold: var(--brand-gold);
+
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  --color-foreground: var(--foreground);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-text: var(--primary-text);
+  --color-primary-subtle: var(--primary-subtle);
+  --color-primary-border: var(--primary-border);
+
+  --color-xp: var(--xp);
+  --color-xp-foreground: var(--xp-foreground);
+  --color-xp-text: var(--xp-text);
+  --color-xp-subtle: var(--xp-subtle);
+  --color-xp-border: var(--xp-border);
+
+  --color-income: var(--income);
+  --color-income-subtle: var(--income-subtle);
+  --color-expense: var(--expense);
+  --color-expense-subtle: var(--expense-subtle);
+
+  --color-chart-income: var(--chart-income);
+  --color-chart-expense: var(--chart-expense);
+  --color-chart-grid: var(--chart-grid);
+
+  --color-warning: var(--warning);
+  --color-ring: var(--ring);
+
+  --color-accent-wealth: var(--accent-wealth);
+  --color-accent-wealth-2: var(--accent-wealth-2);
+  --color-accent-cash: var(--accent-cash);
+  --color-accent-cash-2: var(--accent-cash-2);
+  --color-accent-budget: var(--accent-budget);
+  --color-accent-budget-2: var(--accent-budget-2);
+  --color-accent-goal: var(--accent-goal);
+  --color-accent-goal-2: var(--accent-goal-2);
+  --color-accent-split: var(--accent-split);
+  --color-accent-split-2: var(--accent-split-2);
+  --color-accent-streak: var(--accent-streak);
+  --color-accent-streak-2: var(--accent-streak-2);
+
+  --color-sidebar-fg: var(--sidebar-fg);
+  --color-sidebar-fg-muted: var(--sidebar-fg-muted);
+  --color-sidebar-hover: var(--sidebar-hover);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-sidebar-border: var(--sidebar-border);
+
+  --radius-card: var(--radius);
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans), system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Números monetários com dígitos de largura fixa, para alinhar colunas. */
+  .tabular {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+  p,
+  li {
+    line-height: 1.55;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+/*
+ * Empilhamento de tijolos: cada bloco cai no lugar de cima para baixo, a
+ * metáfora do Build Money — patrimônio construído bloco a bloco. O
+ * animation-delay escalonado (definido inline) faz a torre subir em sequência.
+ */
+@keyframes bricklay {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scaleY(0.6);
+  }
+}
+
+.bricklay {
+  transform-origin: bottom;
+  animation: bricklay 0.4s ease-out backwards;
+}
+
+/* ============================================================
+ * Gradientes de acento por seção.
+ * Cada card colorido do painel usa .grad-<seção>; o texto por cima é branco.
+ * Um leve brilho radial no topo dá profundidade sem pesar.
+ * ============================================================ */
+.grad-wealth {
+  background:
+    radial-gradient(120% 120% at 0% 0%, color-mix(in oklab, white 22%, transparent), transparent 55%),
+    linear-gradient(135deg, var(--accent-wealth), var(--accent-wealth-2));
+}
+.grad-cash {
+  background:
+    radial-gradient(120% 120% at 0% 0%, color-mix(in oklab, white 22%, transparent), transparent 55%),
+    linear-gradient(135deg, var(--accent-cash), var(--accent-cash-2));
+}
+.grad-budget {
+  background:
+    radial-gradient(120% 120% at 0% 0%, color-mix(in oklab, white 22%, transparent), transparent 55%),
+    linear-gradient(135deg, var(--accent-budget), var(--accent-budget-2));
+}
+.grad-goal {
+  background:
+    radial-gradient(120% 120% at 0% 0%, color-mix(in oklab, white 25%, transparent), transparent 55%),
+    linear-gradient(135deg, var(--accent-goal), var(--accent-goal-2));
+}
+.grad-split {
+  background:
+    radial-gradient(120% 120% at 0% 0%, color-mix(in oklab, white 22%, transparent), transparent 55%),
+    linear-gradient(135deg, var(--accent-split), var(--accent-split-2));
+}
+.grad-streak {
+  background:
+    radial-gradient(120% 120% at 0% 0%, color-mix(in oklab, white 22%, transparent), transparent 55%),
+    linear-gradient(135deg, var(--accent-streak), var(--accent-streak-2));
+}
+.grad-income {
+  background:
+    radial-gradient(120% 120% at 0% 0%, color-mix(in oklab, white 20%, transparent), transparent 55%),
+    linear-gradient(135deg, var(--income), color-mix(in oklab, var(--income) 70%, black));
+}
+.grad-expense {
+  background:
+    radial-gradient(120% 120% at 0% 0%, color-mix(in oklab, white 20%, transparent), transparent 55%),
+    linear-gradient(135deg, var(--expense), color-mix(in oklab, var(--expense) 72%, black));
+}
+
+/*
+ * Esconde a barra de rolagem sem tirar a rolagem. No menu recolhido (64px) a
+ * barra roubava largura e empurrava os ícones para fora do centro; a roda do
+ * mouse e o teclado continuam funcionando normalmente.
+ */
+.no-scrollbar {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* Edge legado */
+}
+.no-scrollbar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/*
+ * Grade adaptativa do painel: uma coluna no celular; no desktop, o número de
+ * colunas vem de --cols (calculado pela quantidade de blocos visíveis), e o
+ * último item pode esticar via --span para fechar a linha sem deixar buraco.
+ */
+.grade-auto {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+  align-items: stretch;
+}
+@media (min-width: 1024px) {
+  .grade-auto {
+    grid-template-columns: var(--cols, 1fr);
+  }
+  .grade-auto > [style*="--span"] {
+    grid-column: span var(--span) / span var(--span);
+  }
+}
+
+/*
+ * Faixa de título dos cards do painel: teal da marca, texto branco centralizado.
+ * É a "etiqueta" do card — o olho encontra o bloco antes de ler. O corpo do card
+ * fica um tom acima do fundo, formando a escada fundo → card → faixa.
+ */
+.card-titulo {
+  background: linear-gradient(90deg, var(--sidebar-1), var(--sidebar-2));
+  color: var(--sidebar-fg);
+}
+
+/* Barra lateral no teal da marca (leve gradiente para dar profundidade). */
+.sidebar-teal {
+  background: linear-gradient(180deg, var(--sidebar-1), var(--sidebar-2));
+  color: var(--sidebar-fg);
+}
+
+/* Cartão de vidro sutil para sobrepor a gradientes. */
+.on-accent {
+  color: var(--accent-on);
+}
+.glass {
+  background: color-mix(in oklab, white 16%, transparent);
+  backdrop-filter: blur(4px);
+}
+
+/* ============================================================
+ * Animações de entrada e destaque.
+ * ============================================================ */
+
+/* Sobe suave ao aparecer (cards do painel, escalonado por --stagger). */
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+.rise-in {
+  animation: riseIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation-delay: var(--stagger, 0ms);
+}
+
+/* Preenche uma barra da esquerda para a direita, até a largura-alvo. */
+@keyframes fillBar {
+  from {
+    transform: scaleX(0);
+  }
+}
+.fill-bar {
+  transform-origin: left;
+  animation: fillBar 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation-delay: var(--stagger, 120ms);
+}
+
+/* Brilho que percorre (para o card de sequência/streak em chamas). */
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+.shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, white 25%, transparent), transparent);
+  animation: shimmer 2.8s ease-in-out infinite;
+}
+
+/* Pulso leve (chama de streak, ícones vivos). */
+@keyframes pulseSoft {
+  50% {
+    transform: scale(1.12);
+  }
+}
+.pulse-soft {
+  animation: pulseSoft 1.8s ease-in-out infinite;
+}
+
+/* Desenho da linha do gráfico (stroke-dashoffset animado). */
+@keyframes drawLine {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.draw-line {
+  animation: drawLine 1.4s ease-out forwards;
+}
+
+/* Confete caindo (usado na celebração de metas). */
+@keyframes confettiFall {
+  0% {
+    opacity: 1;
+    transform: translateY(-10px) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(220px) rotate(540deg);
+  }
+}
+.confetti-piece {
+  position: absolute;
+  top: 0;
+  width: 8px;
+  height: 12px;
+  border-radius: 2px;
+  animation: confettiFall 1.2s ease-in forwards;
+}
+
+/* ============================================================
+ * Fundo ambiente — minimalista e sofisticado: uma malha fina de pontos, na cor
+ * da borda (quase imperceptível), que desvanece do topo para as beiradas. Dá
+ * profundidade e textura sem cor nem movimento, no espírito do papel de fundo
+ * de produtos como Linear/Vercel. Estático e decorativo.
+ * ============================================================ */
+.ambient {
+  position: fixed;
+  inset: 0;
+  z-index: -10;
+  pointer-events: none;
+  background-image: radial-gradient(var(--border) 1px, transparent 1px);
+  background-size: 22px 22px;
+  background-position: -11px -11px;
+  opacity: 0.7;
+  -webkit-mask-image: radial-gradient(ellipse 110% 85% at 50% -5%, black, transparent 72%);
+  mask-image: radial-gradient(ellipse 110% 85% at 50% -5%, black, transparent 72%);
+}
+.dark .ambient {
+  opacity: 0.55;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
