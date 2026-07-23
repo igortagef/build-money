@@ -40,22 +40,22 @@ export default async function UsuariosPage() {
         </p>
       </div>
 
-      <Card className="flex flex-wrap items-center gap-x-8 gap-y-3 p-5">
+      <Card className="flex flex-wrap items-center gap-x-10 gap-y-3 p-5">
         <div>
-          <p className="text-xs text-muted-foreground">Ativos</p>
-          <p className="tabular text-lg font-semibold text-income">{ativos}</p>
+          <p className="text-sm text-muted-foreground">Ativos</p>
+          <p className="tabular text-2xl font-semibold text-income">{ativos}</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Desativados</p>
-          <p className="tabular text-lg font-semibold">{inativos}</p>
+          <p className="text-sm text-muted-foreground">Desativados</p>
+          <p className="tabular text-2xl font-semibold">{inativos}</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Sem abrir há {DIAS_ALERTA}+ dias</p>
-          <p className={cn("tabular text-lg font-semibold", semUsar > 0 ? "text-warning" : "")}>{semUsar}</p>
+          <p className="text-sm text-muted-foreground">Sem abrir há {DIAS_ALERTA}+ dias</p>
+          <p className={cn("tabular text-2xl font-semibold", semUsar > 0 ? "text-warning" : "")}>{semUsar}</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Prazo acabando (7d)</p>
-          <p className={cn("tabular text-lg font-semibold", expirando > 0 ? "text-warning" : "")}>{expirando}</p>
+          <p className="text-sm text-muted-foreground">Prazo acabando (7d)</p>
+          <p className={cn("tabular text-2xl font-semibold", expirando > 0 ? "text-warning" : "")}>{expirando}</p>
         </div>
       </Card>
 
@@ -73,11 +73,11 @@ export default async function UsuariosPage() {
             const acabando = !desativado && dr !== null && dr >= 0 && dr <= 7;
 
             return (
-              <div key={u.id} data-email={u.email} className="space-y-3 p-4">
+              <div key={u.id} data-email={u.email} className="space-y-4 p-5">
                 <div className="flex flex-wrap items-center gap-4">
                   <span
                     className={cn(
-                      "grid size-9 shrink-0 place-items-center rounded-full text-xs font-semibold",
+                      "grid size-11 shrink-0 place-items-center rounded-full text-sm font-semibold",
                       desativado ? "bg-surface-muted text-muted-foreground" : "bg-primary-subtle text-primary-text",
                     )}
                   >
@@ -85,35 +85,35 @@ export default async function UsuariosPage() {
                   </span>
 
                   <div className="min-w-0 flex-1">
-                    <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
+                    <p className="flex flex-wrap items-center gap-2 text-base font-semibold">
                       <span className="truncate">{u.name ?? u.email}</span>
                       {u.classificacao && (
-                        <span className="rounded-full bg-primary-subtle px-1.5 py-0.5 text-[10px] font-semibold text-primary-text">
+                        <span className="rounded-full bg-primary-subtle px-2 py-0.5 text-xs font-semibold text-primary-text">
                           {rotuloClassificacao(u.classificacao)}
                         </span>
                       )}
                       {desativado && (
-                        <span className="rounded-full bg-surface-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                        <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
                           {u.motivoDesativacao === "cancelado" ? "cancelado" : "inativado"}
                         </span>
                       )}
                       {vencido && (
-                        <span className="rounded-full bg-expense-subtle px-1.5 py-0.5 text-[10px] font-semibold text-expense">
+                        <span className="rounded-full bg-expense-subtle px-2 py-0.5 text-xs font-semibold text-expense">
                           prazo vencido
                         </span>
                       )}
                     </p>
-                    <p className="truncate text-xs text-muted-foreground">{u.email}</p>
+                    <p className="truncate text-sm text-muted-foreground">{u.email}</p>
 
-                    <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                      <span className="inline-flex items-center gap-1">
-                        <Receipt className="size-3.5" /> {u.lancamentos} lanç.
+                    <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm text-muted-foreground">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Receipt className="size-4" /> {u.lancamentos} lanç.
                       </span>
-                      <span className="inline-flex items-center gap-1">
-                        <Activity className="size-3.5" /> {u.atividades} ativ.
+                      <span className="inline-flex items-center gap-1.5">
+                        <Activity className="size-4" /> {u.atividades} ativ.
                       </span>
-                      <span className={cn("inline-flex items-center gap-1", alerta && "font-medium text-warning")}>
-                        {alerta && <AlertTriangle className="size-3.5" />}
+                      <span className={cn("inline-flex items-center gap-1.5", alerta && "font-medium text-warning")}>
+                        {alerta && <AlertTriangle className="size-4" />}
                         {u.ultimoAcesso
                           ? u.diasSemAbrir === 0
                             ? "abriu hoje"
@@ -122,11 +122,11 @@ export default async function UsuariosPage() {
                       </span>
                       <span
                         className={cn(
-                          "inline-flex items-center gap-1",
+                          "inline-flex items-center gap-1.5",
                           vencido ? "font-medium text-expense" : acabando ? "font-medium text-warning" : "",
                         )}
                       >
-                        <CalendarClock className="size-3.5" />
+                        <CalendarClock className="size-4" />
                         {dr === null
                           ? "sem prazo"
                           : dr < 0
@@ -143,8 +143,8 @@ export default async function UsuariosPage() {
                     {desativado ? (
                       <form action={ativarUsuario}>
                         <input type="hidden" name="id" value={u.id} />
-                        <button type="submit" className={buttonClasses("secondary", "sm")}>
-                          <RotateCcw className="size-3.5" />
+                        <button type="submit" className={buttonClasses("secondary", "md")}>
+                          <RotateCcw className="size-4" />
                           Reativar
                         </button>
                       </form>
@@ -153,7 +153,7 @@ export default async function UsuariosPage() {
                         <form action={inativarUsuario}>
                           <input type="hidden" name="id" value={u.id} />
                           <input type="hidden" name="motivo" value="inativado" />
-                          <button type="submit" className={buttonClasses("ghost", "sm")}>
+                          <button type="submit" className={buttonClasses("ghost", "md")}>
                             Inativar
                           </button>
                         </form>
@@ -162,9 +162,9 @@ export default async function UsuariosPage() {
                           <input type="hidden" name="motivo" value="cancelado" />
                           <button
                             type="submit"
-                            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-expense transition-colors hover:bg-expense-subtle"
+                            className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium text-expense transition-colors hover:bg-expense-subtle"
                           >
-                            <Ban className="size-3.5" />
+                            <Ban className="size-4" />
                             Cancelar
                           </button>
                         </form>
@@ -174,7 +174,7 @@ export default async function UsuariosPage() {
                 </div>
 
                 {/* Classificação e prazo editáveis */}
-                <div className="sm:pl-[52px]">
+                <div className="sm:pl-[60px]">
                   <ControlesUsuario id={u.id} classificacao={u.classificacao} diasRestantes={u.diasRestantes} />
                 </div>
               </div>

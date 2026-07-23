@@ -23,16 +23,17 @@ export function ControlesUsuario({
   const acabando = diasRestantes !== null && diasRestantes >= 0 && diasRestantes <= 7;
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
       {/* Classificação — salva ao selecionar */}
-      <form action={editarClassificacao}>
+      <form action={editarClassificacao} className="flex items-center gap-2">
         <input type="hidden" name="id" value={id} />
+        <span className="text-sm font-medium text-muted-foreground">Tipo:</span>
         <select
           name="classificacao"
           defaultValue={classificacao ?? ""}
           onChange={(e) => e.currentTarget.form?.requestSubmit()}
           aria-label="Classificação do usuário"
-          className="rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-foreground"
+          className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground"
         >
           <option value="">Sem classificação</option>
           {CLASSIFICACOES.map((c) => (
@@ -44,12 +45,13 @@ export function ControlesUsuario({
       </form>
 
       {/* Prazo de acesso em dias */}
-      <form action={editarPrazo} className="flex items-center gap-1.5">
+      <form action={editarPrazo} className="flex items-center gap-2">
         <input type="hidden" name="id" value={id} />
+        <span className="text-sm font-medium text-muted-foreground">Prazo:</span>
         <div className="relative">
           <CalendarClock
             className={cn(
-              "pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2",
+              "pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2",
               vencido ? "text-expense" : acabando ? "text-warning" : "text-muted-foreground",
             )}
           />
@@ -61,14 +63,15 @@ export function ControlesUsuario({
             placeholder="sem prazo"
             aria-label="Dias de acesso restantes"
             className={cn(
-              "w-24 rounded-lg border bg-surface py-1.5 pl-7 pr-2 text-xs tabular text-foreground",
+              "w-28 rounded-lg border bg-surface py-2 pl-9 pr-2 text-sm tabular text-foreground",
               vencido ? "border-expense/50" : acabando ? "border-warning/50" : "border-border",
             )}
           />
         </div>
+        <span className="text-sm text-muted-foreground">dias</span>
         <button
           type="submit"
-          className="rounded-lg border border-border px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground"
+          className="rounded-lg border border-border px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground"
         >
           Definir
         </button>
