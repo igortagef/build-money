@@ -9,7 +9,9 @@ import {
   getResumoPatrimonio,
   getEvolucaoPatrimonio,
 } from "@/lib/assets";
+import { getAccountsWithBalance } from "@/lib/queries";
 import { formatMoney } from "@/lib/money";
+import { BankIcon } from "@/components/bank-icon";
 import { buttonClasses, Card, cn } from "@/components/ui";
 import { WealthChart } from "./wealth-chart";
 import { ValorAtualEditavel, DeleteAssetButton } from "./update-value";
@@ -23,10 +25,11 @@ export default async function PatrimonioPage(props: {
   const { tipo } = await props.searchParams;
   const { ledgerId, baseCurrency } = await requireAccess();
 
-  const [lista, resumo, evolucao, contas, metas] = await Promise.all([
+  const [lista, resumo, evolucao, todasContas, contas, metas] = await Promise.all([
     getAssets(ledgerId),
     getResumoPatrimonio(ledgerId),
     getEvolucaoPatrimonio(ledgerId, 6),
+    getAccountsWithBalance(ledgerId),
     // Contas de onde o dinheiro do aporte pode sair (líquidas, não-piscina).
     db
       .select({ id: accounts.id, name: accounts.name })
@@ -52,6 +55,9 @@ export default async function PatrimonioPage(props: {
   const hoje = new Date().toISOString().slice(0, 10);
   const investimentos = lista.filter((a) => a.investimento);
   const bens = lista.filter((a) => !a.investimento);
+  // Contas do tipo "investimento" (aplicações por conta lançada — ex.: corretora).
+  const contasInvest = todasContas.filter((c) => c.type === "investment" && c.includeInNetWorth);
+  const totalContasInvest = contasInvest.reduce((s, c) => s + c.balance, 0);
 
   // Filtro de investimentos por classe.
   const invFiltrados =
@@ -61,7 +67,7 @@ export default async function PatrimonioPage(props: {
         ? investimentos.filter((a) => a.kind === "variable_income")
         : investimentos;
 
-  const vazio = lista.length === 0;
+  const vazio = lista.length === 0 && contasInvest.length === 0;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -189,6 +195,40 @@ export default async function PatrimonioPage(props: {
                   </Card>
                 )}
               </div>
+            </section>
+          )}
+
+          {/* Investimentos por conta lançada (contas do tipo investimento) */}
+          {contasInvest.length > 0 && (
+            <section className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-sm font-semibold text-muted-foreground">Investimentos em conta</h2>
+                <span className="tabular text-sm font-semibold">{formatMoney(totalContasInvest, baseCurrency)}</span>
+              </div>
+              <div className="space-y-2">
+                {contasInvest.map((c) => (
+                  <Card key={c.id} className="flex items-center gap-3 p-4">
+                    {c.icon ? (
+                      <BankIcon bankId={c.icon} />
+                    ) : (
+                      <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary-subtle text-primary-text" aria-hidden>
+                        <TrendingUp className="size-4" />
+                      </span>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">{c.name}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        Conta de investimento{c.institution ? ` · ${c.institution}` : ""}
+                      </p>
+                    </div>
+                    <span className="tabular font-semibold">{formatMoney(c.balance, c.currency)}</span>
+                  </Card>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Saldo transferido para contas de investimento. Aparece também no card de
+                Investimentos do painel.
+              </p>
             </section>
           )}
 
