@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { Check, Sparkles, Receipt, ArrowLeftRight } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Check, Sparkles, Receipt, ArrowLeftRight, Search } from "lucide-react";
 import { conciliarLinha, criarEConciliar, criarTransferenciaEConciliar } from "../ofx-actions";
+import type { CandidatoBusca } from "@/lib/conciliacao-ofx";
 import { formatMoney } from "@/lib/money";
 import { buttonClasses, cn } from "@/components/ui";
 import type { CurrencyCode } from "@/db/schema";
@@ -31,22 +32,43 @@ export function PainelConciliacao({
   linhaId,
   accountId,
   descricaoInicial,
+  valorLinha,
   currency,
   sugestao,
   sugestaoCat,
   categorias,
   contas,
+  candidatos,
 }: {
   linhaId: string;
   accountId: string;
   descricaoInicial: string;
+  valorLinha: number;
   currency: CurrencyCode;
   sugestao: Sugestao;
   sugestaoCat: string | null;
   categorias: Categoria[];
   contas: Conta[];
+  candidatos: CandidatoBusca[];
 }) {
-  const [aba, setAba] = useState<"lancamento" | "transferencia">("lancamento");
+  const [aba, setAba] = useState<"lancamento" | "transferencia" | "buscar">("lancamento");
+  const [termo, setTermo] = useState("");
+
+  // Resultados da busca: filtra por texto; sem texto, mostra os de MESMO valor
+  // primeiro (o casamento mais provável). Limita para não poluir.
+  const resultados = useMemo(() => {
+    const t = termo.trim().toLowerCase();
+    const alvo = Math.abs(valorLinha);
+    return candidatos
+      .filter((c) => (t ? c.description.toLowerCase().includes(t) : true))
+      .sort((a, b) => {
+        const am = Math.abs(a.amount) === alvo ? 0 : 1;
+        const bm = Math.abs(b.amount) === alvo ? 0 : 1;
+        if (am !== bm) return am - bm;
+        return a.date < b.date ? 1 : -1;
+      })
+      .slice(0, 20);
+  }, [candidatos, termo, valorLinha]);
 
   return (
     <div className="space-y-3">
@@ -102,9 +124,20 @@ export function PainelConciliacao({
           <ArrowLeftRight className="size-3.5" />
           Nova transferência
         </button>
+        <button
+          type="button"
+          onClick={() => setAba("buscar")}
+          className={cn(
+            "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
+            aba === "buscar" ? "bg-surface text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <Search className="size-3.5" />
+          Buscar lançamento
+        </button>
       </div>
 
-      {aba === "lancamento" ? (
+      {aba === "lancamento" && (
         <form action={criarEConciliar} className="space-y-3">
           <input type="hidden" name="linhaId" value={linhaId} />
           <input type="hidden" name="accountId" value={accountId} />
@@ -138,7 +171,9 @@ export function PainelConciliacao({
             Criar e conciliar
           </button>
         </form>
-      ) : (
+      )}
+
+      {aba === "transferencia" && (
         <form action={criarTransferenciaEConciliar} className="space-y-3">
           <input type="hidden" name="linhaId" value={linhaId} />
           <input type="hidden" name="accountId" value={accountId} />
@@ -176,6 +211,52 @@ export function PainelConciliacao({
             Criar transferência e conciliar
           </button>
         </form>
+      )}
+
+      {aba === "buscar" && (
+        <div className="space-y-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={termo}
+              onChange={(e) => setTermo(e.target.value)}
+              placeholder="Buscar por descrição…"
+              className="block w-full rounded-lg border border-border bg-surface py-1.5 pl-9 pr-2 text-sm text-foreground"
+            />
+          </div>
+          {resultados.length === 0 ? (
+            <p className="py-3 text-center text-xs text-muted-foreground">
+              Nenhum lançamento em aberto encontrado.
+            </p>
+          ) : (
+            <ul className="max-h-64 space-y-1 overflow-y-auto">
+              {resultados.map((c) => {
+                const mesmoValor = Math.abs(c.amount) === Math.abs(valorLinha);
+                return (
+                  <li key={c.id}>
+                    <form action={conciliarLinha} className="flex items-center gap-2 rounded-lg border border-border p-2">
+                      <input type="hidden" name="linhaId" value={linhaId} />
+                      <input type="hidden" name="transactionIds" value={c.id} />
+                      <input type="hidden" name="accountId" value={accountId} />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-medium">{c.description}</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {d(c.date)} · {formatMoney(Math.abs(c.amount), currency)}
+                          {c.status === "pending" ? " · previsto" : " · realizado"}
+                          {mesmoValor && <span className="ml-1 font-semibold text-income">· mesmo valor</span>}
+                        </p>
+                      </div>
+                      <button type="submit" className={buttonClasses("secondary", "sm")}>
+                        <Check className="size-3.5" />
+                        Conciliar
+                      </button>
+                    </form>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
       )}
     </div>
   );

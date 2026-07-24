@@ -1,8 +1,58 @@
 import "server-only";
-import { and, eq, gt, gte, lte, ne, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, lte, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { bankStatementLines, reimbursables, transactions } from "@/db/schema";
 import { parseExtrato } from "./import-extrato";
+
+export type CandidatoBusca = {
+  id: string;
+  description: string;
+  date: string;
+  amount: number; // com sinal (− saída / + entrada)
+  type: "income" | "expense" | "transfer";
+  status: "pending" | "cleared";
+};
+
+/**
+ * Lançamentos da conta que ainda podem ser casados manualmente com uma linha do
+ * extrato: previstos (pending, inclui as contas fixas provisionadas) e
+ * realizados (cleared), nunca os já conciliados. Alimenta o "Buscar lançamento".
+ */
+export async function getCandidatosParaBusca(
+  ledgerId: string,
+  accountId: string,
+): Promise<CandidatoBusca[]> {
+  const rows = await db
+    .select({
+      id: transactions.id,
+      description: transactions.description,
+      date: transactions.date,
+      amount: transactions.amount,
+      type: transactions.type,
+      status: transactions.status,
+    })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.ledgerId, ledgerId),
+        eq(transactions.accountId, accountId),
+        ne(transactions.status, "reconciled"),
+        sql`${transactions.supersededByPlanId} is null`,
+      ),
+    )
+    .orderBy(desc(transactions.date))
+    .limit(300);
+
+  return rows.map((r) => ({
+    id: r.id,
+    description: r.description,
+    date: r.date,
+    // Transferência já guarda o sinal; receita/despesa derivam do tipo.
+    amount: r.type === "expense" ? -Math.abs(r.amount) : r.amount,
+    type: r.type as CandidatoBusca["type"],
+    status: r.status as CandidatoBusca["status"],
+  }));
+}
 
 /**
  * Importação do extrato para CONCILIAÇÃO.

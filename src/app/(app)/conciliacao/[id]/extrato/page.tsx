@@ -5,7 +5,7 @@ import { and, asc, eq, isNull, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts } from "@/db/schema";
 import { requireAccess } from "@/lib/auth";
-import { getLinhasPendentes } from "@/lib/conciliacao-ofx";
+import { getLinhasPendentes, getCandidatosParaBusca } from "@/lib/conciliacao-ofx";
 import { getCategoriasParaRegra, getRegrasParaCasar, casarPorRegras } from "@/lib/category-rules";
 import { formatMoney } from "@/lib/money";
 import { buttonClasses, Card, cn } from "@/components/ui";
@@ -33,10 +33,11 @@ export default async function ConciliarExtratoPage(props: {
     .limit(1);
   if (!conta) notFound();
 
-  const [linhas, categorias, regras, contasDestino] = await Promise.all([
+  const [linhas, categorias, regras, candidatos, contasDestino] = await Promise.all([
     getLinhasPendentes(ledgerId, id),
     getCategoriasParaRegra(ledgerId),
     getRegrasParaCasar(ledgerId),
+    getCandidatosParaBusca(ledgerId, id),
     // Destinos possíveis de uma transferência: as outras contas do espaço
     // (não a atual, não arquivadas, sem as contas-piscina internas).
     db
@@ -127,11 +128,13 @@ export default async function ConciliarExtratoPage(props: {
                       linhaId={l.id}
                       accountId={id}
                       descricaoInicial={l.description}
+                      valorLinha={l.amount}
                       currency={conta.currency}
                       sugestao={l.sugestao}
                       sugestaoCat={sugestaoCat}
                       categorias={catsDaLinha}
                       contas={contasDestino}
+                      candidatos={candidatos}
                     />
                   </div>
                 </div>
