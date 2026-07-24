@@ -74,6 +74,27 @@ export async function arquivarLinha(formData: FormData): Promise<void> {
     .set({ status: "arquivada" })
     .where(and(eq(bankStatementLines.id, linhaId), eq(bankStatementLines.ledgerId, ledgerId)));
   revalidatePath(`/conciliacao/${accountId}`);
+  revalidatePath(`/conciliacao/${accountId}/arquivados`);
+  revalidatePath("/conciliacao");
+}
+
+/** Traz uma linha arquivada de volta para a fila de conciliação. */
+export async function desarquivarLinha(formData: FormData): Promise<void> {
+  const { ledgerId } = await requireWriteAccess();
+  const linhaId = String(formData.get("linhaId") ?? "");
+  const accountId = String(formData.get("accountId") ?? "");
+  await db
+    .update(bankStatementLines)
+    .set({ status: "pendente" })
+    .where(
+      and(
+        eq(bankStatementLines.id, linhaId),
+        eq(bankStatementLines.ledgerId, ledgerId),
+        eq(bankStatementLines.status, "arquivada"),
+      ),
+    );
+  revalidatePath(`/conciliacao/${accountId}`);
+  revalidatePath(`/conciliacao/${accountId}/arquivados`);
   revalidatePath("/conciliacao");
 }
 

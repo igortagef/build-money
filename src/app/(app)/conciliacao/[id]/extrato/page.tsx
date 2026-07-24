@@ -5,7 +5,7 @@ import { and, asc, eq, isNull, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts } from "@/db/schema";
 import { requireAccess } from "@/lib/auth";
-import { getLinhasPendentes, getCandidatosParaBusca } from "@/lib/conciliacao-ofx";
+import { getLinhasPendentes, getCandidatosParaBusca, getContagemLinhas } from "@/lib/conciliacao-ofx";
 import { getCategoriasParaRegra, getRegrasParaCasar, casarPorRegras } from "@/lib/category-rules";
 import { formatMoney } from "@/lib/money";
 import { buttonClasses, Card, cn } from "@/components/ui";
@@ -33,11 +33,12 @@ export default async function ConciliarExtratoPage(props: {
     .limit(1);
   if (!conta) notFound();
 
-  const [linhas, categorias, regras, candidatos, contasDestino] = await Promise.all([
+  const [linhas, categorias, regras, candidatos, contagem, contasDestino] = await Promise.all([
     getLinhasPendentes(ledgerId, id),
     getCategoriasParaRegra(ledgerId),
     getRegrasParaCasar(ledgerId),
     getCandidatosParaBusca(ledgerId, id),
+    getContagemLinhas(ledgerId, id),
     // Destinos possíveis de uma transferência: as outras contas do espaço
     // (não a atual, não arquivadas, sem as contas-piscina internas).
     db
@@ -67,9 +68,33 @@ export default async function ConciliarExtratoPage(props: {
         </Link>
         <h1 className="text-2xl font-semibold tracking-tight">Conciliar com o extrato</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          À esquerda, o que veio do banco. À direita, o lançamento do app — ou a criação dele.
+          O extrato importado é o espelho: cada linha vira um lançamento no sistema
+          (ou é arquivada). À esquerda, o banco; à direita, o app.
         </p>
       </div>
+
+      {/* Espelho: situação das linhas importadas desta conta. */}
+      {contagem.pendentes + contagem.conciliadas + contagem.arquivadas > 0 && (
+        <Card className="flex flex-wrap items-center gap-x-6 gap-y-2 p-4">
+          <div>
+            <p className="text-xs text-muted-foreground">Conciliadas</p>
+            <p className="tabular text-lg font-semibold text-income">{contagem.conciliadas}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Pendentes</p>
+            <p className={cn("tabular text-lg font-semibold", contagem.pendentes > 0 && "text-warning")}>
+              {contagem.pendentes}
+            </p>
+          </div>
+          <Link
+            href={`/conciliacao/${id}/arquivados`}
+            className="ml-auto inline-flex items-center gap-1.5 text-sm font-medium text-primary-text hover:underline"
+          >
+            <Archive className="size-4" />
+            Arquivadas ({contagem.arquivadas})
+          </Link>
+        </Card>
+      )}
 
       <Card className="p-5">
         <ImportarExtratoForm accountId={id} />

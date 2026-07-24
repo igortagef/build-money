@@ -127,6 +127,49 @@ export type LinhaComSugestao = {
   sugestao: SugestaoPar | null;
 };
 
+/** Quantas linhas do extrato em cada situação (o "espelho" da conta). */
+export async function getContagemLinhas(ledgerId: string, accountId: string) {
+  const rows = await db
+    .select({
+      status: bankStatementLines.status,
+      n: sql<number>`count(*)`.mapWith(Number),
+    })
+    .from(bankStatementLines)
+    .where(and(eq(bankStatementLines.ledgerId, ledgerId), eq(bankStatementLines.accountId, accountId)))
+    .groupBy(bankStatementLines.status);
+  const por = new Map(rows.map((r) => [r.status, r.n]));
+  return {
+    pendentes: por.get("pendente") ?? 0,
+    conciliadas: por.get("conciliada") ?? 0,
+    arquivadas: por.get("arquivada") ?? 0,
+  };
+}
+
+export type LinhaArquivada = { id: string; date: string; amount: number; description: string };
+
+/** Linhas que o usuário arquivou (ignorou), para a tela separada. */
+export async function getLinhasArquivadas(
+  ledgerId: string,
+  accountId: string,
+): Promise<LinhaArquivada[]> {
+  return db
+    .select({
+      id: bankStatementLines.id,
+      date: bankStatementLines.date,
+      amount: bankStatementLines.amount,
+      description: bankStatementLines.description,
+    })
+    .from(bankStatementLines)
+    .where(
+      and(
+        eq(bankStatementLines.ledgerId, ledgerId),
+        eq(bankStatementLines.accountId, accountId),
+        eq(bankStatementLines.status, "arquivada"),
+      ),
+    )
+    .orderBy(desc(bankStatementLines.date));
+}
+
 /** Quanto duas descrições se parecem (0 a 1), por palavras em comum. */
 function similaridade(a: string, b: string): number {
   const palavras = (s: string) =>
