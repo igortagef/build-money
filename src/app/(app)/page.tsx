@@ -123,12 +123,20 @@ export default async function PainelPage(props: {
   // Período exibido, usado nos atalhos dos KPIs para os lançamentos.
   const { start: inicioMes, end: fimMes } = monthRange(referencia);
 
-  const saldoContas = accounts
-    .filter((a) => a.includeInNetWorth)
-    .reduce((sum, a) => sum + a.balance, 0);
+  // Contas de tipo "investimento" (ex.: corretora) contam como INVESTIMENTO, não
+  // como saldo em conta: o dinheiro transferido para lá é aplicação. A piscina
+  // interna de aportes já fica fora (includeInNetWorth = false).
+  const contasNaoInvest = accounts.filter((a) => a.includeInNetWorth && a.type !== "investment");
+  const contasInvest = accounts.filter((a) => a.includeInNetWorth && a.type === "investment");
+  const saldoContas = contasNaoInvest.reduce((sum, a) => sum + a.balance, 0);
+  const saldoContasInvest = contasInvest.reduce((sum, a) => sum + a.balance, 0);
 
-  // Patrimônio consolidado = dinheiro nas contas + investimentos + bens.
-  const patrimonioLiquido = saldoContas + patrimonio.patrimonioTotal;
+  // Card de investimentos = patrimônio (ativos) + saldo das contas de investimento.
+  const investimentosTotal = patrimonio.valorInvestimentos + saldoContasInvest;
+  const qtdInvestimentosTotal = patrimonio.qtdInvestimentos + contasInvest.length;
+
+  // Patrimônio consolidado = contas + contas de investimento + patrimônio + bens.
+  const patrimonioLiquido = saldoContas + saldoContasInvest + patrimonio.patrimonioTotal;
   const metasAtivas = metas.filter((m) => m.status === "active");
   const firstName = userName?.split(" ")[0];
 
@@ -171,13 +179,13 @@ export default async function PainelPage(props: {
           <PainelHero
             patrimonioLiquido={patrimonioLiquido}
             saldoContas={saldoContas}
-            qtdContas={accounts.filter((a) => a.includeInNetWorth).length}
+            qtdContas={contasNaoInvest.length}
             resultadoMes={summary.balance}
             receitaMes={summary.income}
             despesaMes={summary.expense}
-            investimentos={patrimonio.valorInvestimentos}
+            investimentos={investimentosTotal}
             rendimentoPct={patrimonio.rendimentoPct}
-            qtdInvestimentos={patrimonio.qtdInvestimentos}
+            qtdInvestimentos={qtdInvestimentosTotal}
             periodo={{ de: inicioMes, ate: fimMes }}
             currency={baseCurrency}
             visiveis={["kpi-receitas", "kpi-despesas", "kpi-resultado"].filter(mostra)}
@@ -187,13 +195,13 @@ export default async function PainelPage(props: {
           <PainelHero
             patrimonioLiquido={patrimonioLiquido}
             saldoContas={saldoContas}
-            qtdContas={accounts.filter((a) => a.includeInNetWorth).length}
+            qtdContas={contasNaoInvest.length}
             resultadoMes={summary.balance}
             receitaMes={summary.income}
             despesaMes={summary.expense}
-            investimentos={patrimonio.valorInvestimentos}
+            investimentos={investimentosTotal}
             rendimentoPct={patrimonio.rendimentoPct}
-            qtdInvestimentos={patrimonio.qtdInvestimentos}
+            qtdInvestimentos={qtdInvestimentosTotal}
             variacaoPatrimonio={compPatrimonio}
             periodo={{ de: inicioMes, ate: fimMes }}
             currency={baseCurrency}
