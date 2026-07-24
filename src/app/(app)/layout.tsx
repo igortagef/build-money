@@ -1,4 +1,7 @@
 import { AlertTriangle, CalendarClock } from "lucide-react";
+import { eq } from "drizzle-orm";
+import { db } from "@/db";
+import { users } from "@/db/schema";
 import { requireContaAccess } from "@/lib/auth";
 import { cn } from "@/components/ui";
 import { checkInDiario, getProgresso, semQuebrar } from "@/lib/gamification";
@@ -25,6 +28,13 @@ export default async function AppLayout({
   // por conta própria (via requireAccess), então aqui só entregamos a casca.
   const access = await requireContaAccess();
 
+  const [perfil] = await db
+    .select({ imageUrl: users.imageUrl })
+    .from(users)
+    .where(eq(users.id, access.userId))
+    .limit(1);
+  const fotoUrl = perfil?.imageUrl ?? null;
+
   if (access.deactivated) {
     return (
       <div className="flex min-h-dvh flex-col">
@@ -33,7 +43,7 @@ export default async function AppLayout({
           <Logo />
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            <UserMenu name={access.userName} email={access.userEmail} />
+            <UserMenu name={access.userName} email={access.userEmail} imageUrl={fotoUrl} />
           </div>
         </header>
         <div className="flex items-center gap-2 border-b border-warning/25 bg-xp-subtle px-4 py-2 text-sm text-warning lg:px-6">
@@ -107,7 +117,7 @@ export default async function AppLayout({
           <span className="h-6 w-px bg-border" aria-hidden />
           <AlertasBell alertas={alertas} />
           <ThemeToggle />
-          <UserMenu name={access.userName} email={access.userEmail} />
+          <UserMenu name={access.userName} email={access.userEmail} imageUrl={fotoUrl} />
         </header>
 
         <main className="flex-1 p-4 pb-24 lg:p-6 lg:pb-6">{children}</main>
