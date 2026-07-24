@@ -7,15 +7,15 @@ e a do Nginx (`deploy/nginx-build-money.conf`).
 O que **é com você** (precisa do seu GitHub e do seu VPS) está abaixo. É uma vez
 só; depois, atualizar é **um comando**.
 
-> Substitua nos comandos: `app.suaempresa.com.br` pelo seu subdomínio e
-> `SEU_USUARIO/build-money` pelo seu repositório do GitHub.
+> Substitua nos comandos: `bm.agef.com.br` pelo seu subdomínio e
+> `igortagef/build-money` pelo seu repositório do GitHub.
 
 ---
 
 ## Antes de começar, tenha em mãos
 - Acesso **SSH** ao VPS (IP, usuário root e senha/chave — no painel da Hostinger).
 - Uma conta no **GitHub**.
-- O **subdomínio** que vai usar (ex.: `app.suaempresa.com.br`).
+- O **subdomínio** que vai usar (ex.: `bm.agef.com.br`).
 - A **connection string do banco de produção** no Neon (recomendo uma *branch*
   nova, separada do banco de teste — veja a nota no fim).
 
@@ -25,7 +25,7 @@ só; depois, atualizar é **um comando**.
 1. Crie um repositório **privado** no GitHub chamado `build-money` (sem README).
 2. No terminal do Claude (aqui), quando você mandar, eu rodo:
    ```
-   git remote add origin https://github.com/SEU_USUARIO/build-money.git
+   git remote add origin https://github.com/igortagef/build-money.git
    git push -u origin main
    ```
    > A primeira vez pede login do GitHub — isso é seu (eu não digito senha).
@@ -44,7 +44,7 @@ npm install -g pm2
 
 # 2.2 Baixar o código
 mkdir -p /var/www && cd /var/www
-git clone https://github.com/SEU_USUARIO/build-money.git
+git clone https://github.com/igortagef/build-money.git
 cd build-money
 
 # 2.3 Criar o arquivo de segredos (produção) — veja os valores abaixo
@@ -55,10 +55,10 @@ No `nano`, cole (troque pelos seus valores) e salve (Ctrl+O, Enter, Ctrl+X):
 ```
 DATABASE_URL=postgresql://...seu banco de PRODUÇÃO no Neon...
 AUTH_SECRET=cole-aqui-um-segredo-forte
-APP_URL=https://app.suaempresa.com.br
+APP_URL=https://bm.agef.com.br
 # E-mail (opcional agora; sem isto, o link de reset cai no log):
 RESEND_API_KEY=
-EMAIL_FROM="Build Money <nao-responda@suaempresa.com.br>"
+EMAIL_FROM="Build Money <nao-responda@agef.com.br>"
 ```
 > Gere o `AUTH_SECRET` com: `openssl rand -base64 32`
 > **NÃO** coloque `CADASTRO_ABERTO` — senão o cadastro fica aberto a qualquer um.
@@ -82,22 +82,21 @@ O app agora roda em `http://127.0.0.1:3000` dentro do VPS. Falta expor com domí
 # 3.1 Nginx + certbot
 apt-get install -y nginx certbot python3-certbot-nginx
 
-# 3.2 Config do site (o arquivo já está pronto em deploy/)
+# 3.2 Config do site (já vem com bm.agef.com.br — não precisa editar)
 cp /var/www/build-money/deploy/nginx-build-money.conf /etc/nginx/sites-available/build-money
-nano /etc/nginx/sites-available/build-money   # troque o subdomínio (2 lugares)
 ln -s /etc/nginx/sites-available/build-money /etc/nginx/sites-enabled/
 nginx -t && systemctl reload nginx
 ```
 
-**DNS:** no painel onde fica o domínio da AG&F, crie um registro **A**:
-`app`  →  o **IP do VPS**. (Espere alguns minutos propagar.)
+**DNS:** no painel onde fica o domínio `agef.com.br`, crie um registro **A**:
+nome `bm`  →  o **IP do VPS**. (Espere alguns minutos propagar.)
 
 ```bash
 # 3.3 SSL automático (cadeado)
-certbot --nginx -d app.suaempresa.com.br
+certbot --nginx -d bm.agef.com.br
 ```
 
-Pronto: `https://app.suaempresa.com.br` no ar. O **primeiro usuário a se
+Pronto: `https://bm.agef.com.br` no ar. O **primeiro usuário a se
 cadastrar vira o admin** (back-office); os demais entram por convite.
 
 ---
