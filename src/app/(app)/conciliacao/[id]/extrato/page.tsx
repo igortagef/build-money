@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Archive, Check, Sparkles } from "lucide-react";
-import { and, eq } from "drizzle-orm";
+import { ArrowLeft, Archive } from "lucide-react";
+import { and, asc, eq, isNull, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts } from "@/db/schema";
 import { requireAccess } from "@/lib/auth";
@@ -10,7 +10,8 @@ import { getCategoriasParaRegra, getRegrasParaCasar, casarPorRegras } from "@/li
 import { formatMoney } from "@/lib/money";
 import { buttonClasses, Card, cn } from "@/components/ui";
 import { ImportarExtratoForm } from "../importar-form";
-import { conciliarLinha, arquivarLinha, criarEConciliar } from "../../ofx-actions";
+import { PainelConciliacao } from "../painel";
+import { arquivarLinha } from "../../ofx-actions";
 
 export const metadata = { title: "Conciliar extrato · Build Money" };
 
@@ -32,10 +33,25 @@ export default async function ConciliarExtratoPage(props: {
     .limit(1);
   if (!conta) notFound();
 
-  const [linhas, categorias, regras] = await Promise.all([
+  const [linhas, categorias, regras, contasDestino] = await Promise.all([
     getLinhasPendentes(ledgerId, id),
     getCategoriasParaRegra(ledgerId),
     getRegrasParaCasar(ledgerId),
+    // Destinos possíveis de uma transferência: as outras contas do espaço
+    // (não a atual, não arquivadas, sem as contas-piscina internas).
+    db
+      .select({ id: accounts.id, name: accounts.name })
+      .from(accounts)
+      .where(
+        and(
+          eq(accounts.ledgerId, ledgerId),
+          ne(accounts.id, id),
+          isNull(accounts.archivedAt),
+          eq(accounts.isReimbursementPool, false),
+          eq(accounts.isInvestmentPool, false),
+        ),
+      )
+      .orderBy(asc(accounts.name)),
   ]);
 
   return (
@@ -107,86 +123,16 @@ export default async function ConciliarExtratoPage(props: {
 
                   {/* ---------- App ---------- */}
                   <div className="bg-surface p-4">
-                    {l.sugestao ? (
-                      <form action={conciliarLinha} className="space-y-3">
-                        <input type="hidden" name="linhaId" value={l.id} />
-                        <input type="hidden" name="transactionIds" value={l.sugestao.ids.join(",")} />
-                        <input type="hidden" name="accountId" value={id} />
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={cn(
-                              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold",
-                              l.sugestao.confianca === "alta"
-                                ? "bg-income-subtle text-income"
-                                : "bg-xp-subtle text-warning",
-                            )}
-                          >
-                            <Sparkles className="size-3" />
-                            {l.sugestao.racha
-                              ? "Racha (2 lançamentos)"
-                              : l.sugestao.confianca === "alta"
-                                ? "Par encontrado"
-                                : "Par provável"}
-                          </span>
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium">{l.sugestao.description}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {d(l.sugestao.date)} · {formatMoney(Math.abs(l.sugestao.amount), conta.currency)}
-                          </p>
-                          {l.sugestao.racha && (
-                            <p className="mt-1 text-[11px] text-primary-text">
-                              As duas pernas do racha somam o valor desta linha e serão conferidas juntas.
-                            </p>
-                          )}
-                        </div>
-                        <button type="submit" className={buttonClasses("primary", "sm")}>
-                          <Check className="size-3.5" />
-                          Conciliar
-                        </button>
-                      </form>
-                    ) : (
-                      <form action={criarEConciliar} className="space-y-3">
-                        <input type="hidden" name="linhaId" value={l.id} />
-                        <input type="hidden" name="accountId" value={id} />
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          Sem par — criar lançamento
-                        </p>
-                        <label className="block text-xs font-medium text-muted-foreground">
-                          Descrição
-                          <input
-                            name="descricao"
-                            defaultValue={l.description}
-                            required
-                            className="mt-1 block w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-sm text-foreground"
-                          />
-                        </label>
-                        <label className="block text-xs font-medium text-muted-foreground">
-                          Categoria
-                          <select
-                            name="categoryId"
-                            defaultValue={sugestaoCat ?? ""}
-                            className="mt-1 block w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-sm text-foreground"
-                          >
-                            <option value="">Sem categoria</option>
-                            {catsDaLinha.map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {c.label}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        {sugestaoCat && (
-                          <p className="text-[11px] text-primary-text">
-                            Categoria sugerida pelas suas regras.
-                          </p>
-                        )}
-                        <button type="submit" className={buttonClasses("primary", "sm")}>
-                          <Check className="size-3.5" />
-                          Criar e conciliar
-                        </button>
-                      </form>
-                    )}
+                    <PainelConciliacao
+                      linhaId={l.id}
+                      accountId={id}
+                      descricaoInicial={l.description}
+                      currency={conta.currency}
+                      sugestao={l.sugestao}
+                      sugestaoCat={sugestaoCat}
+                      categorias={catsDaLinha}
+                      contas={contasDestino}
+                    />
                   </div>
                 </div>
               </Card>
