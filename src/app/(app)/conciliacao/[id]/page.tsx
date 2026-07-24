@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Check, CircleDashed, AlertCircle, FileUp, Landmark } from "lucide-react";
+import { ArrowLeft, Check, CircleDashed, AlertCircle, FileUp, Landmark, ScrollText } from "lucide-react";
 import { requireAccess } from "@/lib/auth";
 import { getConciliacaoConta } from "@/lib/conciliacao-conta";
 import { getUltimaConferenciaSaldo } from "@/lib/saldo-banco";
@@ -149,6 +149,10 @@ export default async function ConciliacaoContaPage(props: {
         <Link href={`/conciliacao/${id}/extrato`} className={buttonClasses("primary", "sm")}>
           <FileUp className="size-4" />
           Conciliar com o extrato (OFX)
+        </Link>
+        <Link href={`/conciliacao/${id}/demonstrativo`} className={buttonClasses("secondary", "sm")}>
+          <ScrollText className="size-4" />
+          Demonstrativo diário
         </Link>
       </div>
 

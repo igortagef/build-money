@@ -65,6 +65,22 @@ export async function conferirSaldoBanco(
   return { ok: true };
 }
 
+/**
+ * Informa o saldo do banco de um dia específico (forma simples, para o
+ * demonstrativo diário). Silenciosa: entrada inválida apenas não grava.
+ */
+export async function informarSaldoDia(formData: FormData): Promise<void> {
+  const { ledgerId } = await requireWriteAccess();
+  const accountId = String(formData.get("accountId") ?? "");
+  const data = String(formData.get("data") ?? "");
+  const balance = parseMoney(String(formData.get("saldo") ?? ""));
+  if (!accountId || !/^\d{4}-\d{2}-\d{2}$/.test(data) || balance === null) return;
+
+  await registrarSaldoBanco(ledgerId, accountId, data, balance);
+  revalidatePath(`/conciliacao/${accountId}/demonstrativo`);
+  revalidatePath(`/conciliacao/${accountId}`);
+}
+
 /** Desfaz a conferência do dia (voltar atrás sem sair da tela). */
 export async function desconferirDia(formData: FormData): Promise<void> {
   const { ledgerId } = await requireWriteAccess();
