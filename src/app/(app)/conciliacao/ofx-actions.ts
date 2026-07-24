@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { accounts, bankStatementLines, transactions, transactionSplits } from "@/db/schema";
 import { requireWriteAccess } from "@/lib/auth";
+import { calcularDataDeCaixa } from "@/lib/statement";
 import { importarExtratoParaConciliacao } from "@/lib/conciliacao-ofx";
 
 export type ImportState = { ok?: boolean; erro?: string; msg?: string };
@@ -96,6 +97,14 @@ export async function criarEConciliar(formData: FormData): Promise<void> {
     .limit(1);
   if (!linha || linha.status !== "pendente") return;
 
+  // A conta define a data de caixa: num cartão, a compra (competência) tem caixa
+  // no vencimento da fatura. Sem isto, o regime caixa não separaria a fatura.
+  const [conta] = await db
+    .select({ type: accounts.type, statementClosingDay: accounts.statementClosingDay, paymentDueDay: accounts.paymentDueDay })
+    .from(accounts)
+    .where(eq(accounts.id, linha.accountId))
+    .limit(1);
+
   const valor = Math.abs(linha.amount);
   const tipo = linha.amount < 0 ? "expense" : "income";
 
@@ -115,6 +124,7 @@ export async function criarEConciliar(formData: FormData): Promise<void> {
         amountBase: valor,
         description: descricao,
         date: linha.date,
+        settlementDate: conta ? calcularDataDeCaixa(linha.date, conta) : linha.date,
       })
       .returning({ id: transactions.id });
 
