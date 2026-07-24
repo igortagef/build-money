@@ -64,6 +64,7 @@ export async function getCategoriasParaRegra(ledgerId: string) {
       nome: categories.name,
       paiNome: pai.name,
       parentId: categories.parentId,
+      tipo: categories.type,
     })
     .from(categories)
     .leftJoin(pai, eq(pai.id, categories.parentId))
@@ -73,6 +74,7 @@ export async function getCategoriasParaRegra(ledgerId: string) {
   return rows
     .map((c) => ({
       id: c.id,
+      tipo: c.tipo,
       label: c.paiNome ? `${c.paiNome} › ${c.nome}` : c.nome,
     }))
     .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));

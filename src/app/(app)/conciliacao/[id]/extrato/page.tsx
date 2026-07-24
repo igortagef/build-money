@@ -67,6 +67,10 @@ export default async function ConciliarExtratoPage(props: {
           {linhas.map((l) => {
             // Sem par: o formulário já vem com a categoria sugerida pelas regras.
             const sugestaoCat = l.sugestao ? null : casarPorRegras(regras, l.description);
+            // Entrada (+) mostra só categorias de receita; saída (−) só de despesa.
+            const catsDaLinha = categorias.filter((c) =>
+              l.amount < 0 ? c.tipo === "expense" : c.tipo === "income",
+            );
             return (
               <Card key={l.id} className="overflow-hidden p-0">
                 <div className="grid gap-px bg-border md:grid-cols-2">
@@ -165,7 +169,7 @@ export default async function ConciliarExtratoPage(props: {
                             className="mt-1 block w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-sm text-foreground"
                           >
                             <option value="">Sem categoria</option>
-                            {categorias.map((c) => (
+                            {catsDaLinha.map((c) => (
                               <option key={c.id} value={c.id}>
                                 {c.label}
                               </option>
