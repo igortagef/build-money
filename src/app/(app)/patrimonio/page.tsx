@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { Plus, TrendingUp, TrendingDown, Home, Landmark } from "lucide-react";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
+import { db } from "@/db";
+import { accounts, goals } from "@/db/schema";
 import { requireAccess } from "@/lib/auth";
 import {
   getAssets,
@@ -10,6 +13,7 @@ import { formatMoney } from "@/lib/money";
 import { buttonClasses, Card, cn } from "@/components/ui";
 import { WealthChart } from "./wealth-chart";
 import { ValorAtualEditavel, DeleteAssetButton } from "./update-value";
+import { AporteForm } from "./aporte-form";
 
 export const metadata = { title: "Patrimônio · Build Money" };
 
@@ -19,12 +23,33 @@ export default async function PatrimonioPage(props: {
   const { tipo } = await props.searchParams;
   const { ledgerId, baseCurrency } = await requireAccess();
 
-  const [lista, resumo, evolucao] = await Promise.all([
+  const [lista, resumo, evolucao, contas, metas] = await Promise.all([
     getAssets(ledgerId),
     getResumoPatrimonio(ledgerId),
     getEvolucaoPatrimonio(ledgerId, 6),
+    // Contas de onde o dinheiro do aporte pode sair (líquidas, não-piscina).
+    db
+      .select({ id: accounts.id, name: accounts.name })
+      .from(accounts)
+      .where(
+        and(
+          eq(accounts.ledgerId, ledgerId),
+          isNull(accounts.archivedAt),
+          eq(accounts.isReimbursementPool, false),
+          eq(accounts.isInvestmentPool, false),
+          inArray(accounts.type, ["checking", "savings", "cash"]),
+        ),
+      )
+      .orderBy(asc(accounts.name)),
+    // Metas ativas, para o vínculo opcional do aporte.
+    db
+      .select({ id: goals.id, name: goals.name })
+      .from(goals)
+      .where(and(eq(goals.ledgerId, ledgerId), eq(goals.status, "active")))
+      .orderBy(asc(goals.name)),
   ]);
 
+  const hoje = new Date().toISOString().slice(0, 10);
   const investimentos = lista.filter((a) => a.investimento);
   const bens = lista.filter((a) => !a.investimento);
 
@@ -149,7 +174,14 @@ export default async function PatrimonioPage(props: {
 
               <div className="space-y-2">
                 {invFiltrados.map((a) => (
-                  <AtivoCard key={a.id} ativo={a} currency={baseCurrency} />
+                  <AtivoCard
+                    key={a.id}
+                    ativo={a}
+                    currency={baseCurrency}
+                    contas={contas}
+                    metas={metas}
+                    hoje={hoje}
+                  />
                 ))}
                 {invFiltrados.length === 0 && (
                   <Card className="p-6 text-center text-sm text-muted-foreground">
@@ -198,9 +230,15 @@ export default async function PatrimonioPage(props: {
 function AtivoCard({
   ativo,
   currency,
+  contas,
+  metas,
+  hoje,
 }: {
   ativo: Awaited<ReturnType<typeof getAssets>>[number];
   currency: "BRL" | "USD" | "EUR";
+  contas: { id: string; name: string }[];
+  metas: { id: string; name: string }[];
+  hoje: string;
 }) {
   const rend = ativo.rendimento ?? 0;
   const positivo = rend >= 0;
@@ -250,6 +288,8 @@ function AtivoCard({
         <span>Aportado {formatMoney(ativo.investedValue, currency)}</span>
         <span>Hoje {formatMoney(ativo.currentValue, currency)}</span>
       </div>
+
+      <AporteForm assetId={ativo.id} currency={currency} contas={contas} metas={metas} hoje={hoje} />
     </Card>
   );
 }

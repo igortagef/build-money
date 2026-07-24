@@ -1,0 +1,1 @@
+ALTER TABLE "accounts" ADD COLUMN "is_investment_pool" boolean DEFAULT false NOT NULL;

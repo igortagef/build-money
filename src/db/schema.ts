@@ -469,6 +469,11 @@ export const accounts = pgTable(
     // aqui, fora do resultado. Criada sob demanda, uma por espaço, e escondida
     // dos seletores comuns de lançamento.
     isReimbursementPool: boolean("is_reimbursement_pool").notNull().default(false),
+    // A conta-destino dos aportes de investimento (uma por espaço, criada sob
+    // demanda). Fora do net worth para não duplicar com o valor do patrimônio,
+    // e escondida dos seletores comuns; existe para a transferência do aporte
+    // ser conciliável com o extrato.
+    isInvestmentPool: boolean("is_investment_pool").notNull().default(false),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
