@@ -5,7 +5,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
-import { accounts, categories, transactions, transactionSplits } from "@/db/schema";
+import { accounts, bankStatementLines, categories, transactions, transactionSplits } from "@/db/schema";
 import { requireWriteAccess } from "@/lib/auth";
 import { parseMoney, convertMoney } from "@/lib/money";
 import { transactionInputSchema } from "@/lib/transactions";
@@ -240,17 +240,21 @@ export async function updateTransaction(
   const { conta: account, tx } = v;
   const paraBase = account.currency === baseCurrency ? 1 : v.paraBase;
 
+  // Editar um lançamento JÁ conciliado reabre a conferência: o que foi batido
+  // com o extrato mudou, então precisa ser reconferido. O status volta a
+  // "cleared" (pendente de conciliação) e o vínculo com a linha do extrato é
+  // desfeito — a linha importada volta para a fila.
+  const reabreConciliacao = existente.status === "reconciled";
+
   await db.transaction(async (trx) => {
     await trx
       .update(transactions)
       .set({
         accountId: tx.accountId,
         type: tx.type,
-        // O status vem do form (o seletor Situação), exceto quando o
-        // lançamento estava conciliado: aí o form nem mostra o seletor e manda
-        // "reconciled" de volta, então editar valores não desfaz a conciliação
-        // sem intenção.
-        status: existente.status === "reconciled" ? "reconciled" : tx.status,
+        // Conciliado -> reabre (cleared). Caso contrário, respeita o seletor.
+        status: reabreConciliacao ? "cleared" : tx.status,
+        reconciledAt: reabreConciliacao ? null : undefined,
         amount: tx.amount,
         currency: tx.currency,
         amountBase: convertMoney(tx.amount, paraBase),
@@ -263,6 +267,20 @@ export async function updateTransaction(
         updatedAt: new Date(),
       })
       .where(and(eq(transactions.id, id), eq(transactions.ledgerId, ledgerId)));
+
+    if (reabreConciliacao) {
+      // A linha do extrato que estava casada com este lançamento volta a ficar
+      // pendente, para ser reconciliada com o valor já corrigido.
+      await trx
+        .update(bankStatementLines)
+        .set({ status: "pendente", transactionId: null })
+        .where(
+          and(
+            eq(bankStatementLines.transactionId, id),
+            eq(bankStatementLines.ledgerId, ledgerId),
+          ),
+        );
+    }
 
     // Rateios são substituídos por inteiro: comparar linha a linha para achar
     // o que mudou seria mais código e mais chance de erro do que apagar e
