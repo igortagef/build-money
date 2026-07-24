@@ -1,0 +1,2 @@
+# Scripts shell sempre com quebra de linha LF (evita erro de bash no Linux).
+*.sh text eol=lf
