@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeftRight, CreditCard, Banknote, Landmark, PiggyBank, Plus, TrendingUp, ListChecks } from "lucide-react";
+import { ArrowLeftRight, CreditCard, Banknote, Landmark, PiggyBank, Plus, TrendingUp, ListChecks, Pencil } from "lucide-react";
 import { requireAccess } from "@/lib/auth";
 import { getAccountsWithBalance } from "@/lib/queries";
 import { formatMoney } from "@/lib/money";
@@ -113,6 +113,14 @@ export default async function ContasPage() {
                       </p>
                     )}
                   </div>
+
+                  <Link
+                    href={`/contas/${account.id}/editar`}
+                    aria-label={`Editar conta ${account.name}`}
+                    className="grid size-8 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground"
+                  >
+                    <Pencil className="size-4" />
+                  </Link>
                 </div>
 
                 {usage !== null && (

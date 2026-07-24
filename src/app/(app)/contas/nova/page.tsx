@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { requireAccess } from "@/lib/auth";
-import { NewAccountForm } from "./form";
+import { AccountForm } from "../account-form";
 
 export const metadata = { title: "Nova conta · Build Money" };
 
@@ -21,7 +21,7 @@ export default async function NovaContaPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Nova conta</h1>
       </div>
 
-      <NewAccountForm />
+      <AccountForm mode="create" />
     </div>
   );
 }
