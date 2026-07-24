@@ -5,6 +5,7 @@ import { useFormStatus } from "react-dom";
 import Link from "next/link";
 import { createAsset, type AssetState } from "../actions";
 import { Alert, Button, Card, Field, Input, Select, cn } from "@/components/ui";
+import { FotoPicker } from "@/components/foto-picker";
 import { CURRENCIES, formatMoney, parseMoney } from "@/lib/money";
 import { KIND_LABEL } from "@/lib/asset-kinds";
 import type { AssetKind } from "@/db/schema";
@@ -133,6 +134,13 @@ export function NewAssetForm({
             placeholder={investimento ? "Ex.: XP Investimentos" : "Ex.: Rua X, 123"}
           />
         </Field>
+
+        {/* Foto só para bens — dá um detalhe visual (carro, imóvel, joia…). */}
+        {!investimento && (
+          <Field label="Foto do bem" htmlFor="foto" hint="Opcional. Só para detalhe.">
+            <FotoPicker name="foto" label="Adicionar foto" />
+          </Field>
+        )}
       </Card>
 
       <Card className="space-y-5 p-5">

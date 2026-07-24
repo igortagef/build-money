@@ -1017,6 +1017,8 @@ export const assets = pgTable(
     currentValue: bigint("current_value", { mode: "number" }).notNull().default(0),
     currency: currencyCode("currency").notNull().default("BRL"),
     notes: text("notes"),
+    // Foto do bem (data URL reduzida no navegador), só para dar detalhe visual.
+    imageUrl: text("image_url"),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
