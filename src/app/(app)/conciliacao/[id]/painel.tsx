@@ -53,6 +53,16 @@ export function PainelConciliacao({
 }) {
   const [aba, setAba] = useState<"lancamento" | "transferencia" | "buscar">("lancamento");
   const [termo, setTermo] = useState("");
+  const [sel, setSel] = useState<ReadonlySet<string>>(new Set());
+
+  const alternar = (id: string) => {
+    const proximo = new Set(sel);
+    if (proximo.has(id)) proximo.delete(id);
+    else proximo.add(id);
+    setSel(proximo);
+  };
+  const somaSel = candidatos.filter((c) => sel.has(c.id)).reduce((s, c) => s + Math.abs(c.amount), 0);
+  const somaBate = sel.size > 0 && somaSel === Math.abs(valorLinha);
 
   // Resultados da busca: filtra por texto; sem texto, mostra os de MESMO valor
   // primeiro (o casamento mais provável). Limita para não poluir.
@@ -229,32 +239,61 @@ export function PainelConciliacao({
               Nenhum lançamento em aberto encontrado.
             </p>
           ) : (
-            <ul className="max-h-64 space-y-1 overflow-y-auto">
-              {resultados.map((c) => {
-                const mesmoValor = Math.abs(c.amount) === Math.abs(valorLinha);
-                return (
-                  <li key={c.id}>
-                    <form action={conciliarLinha} className="flex items-center gap-2 rounded-lg border border-border p-2">
-                      <input type="hidden" name="linhaId" value={linhaId} />
-                      <input type="hidden" name="transactionIds" value={c.id} />
-                      <input type="hidden" name="accountId" value={accountId} />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-medium">{c.description}</p>
-                        <p className="text-[11px] text-muted-foreground">
-                          {d(c.date)} · {formatMoney(Math.abs(c.amount), currency)}
-                          {c.status === "pending" ? " · previsto" : " · realizado"}
-                          {mesmoValor && <span className="ml-1 font-semibold text-income">· mesmo valor</span>}
-                        </p>
-                      </div>
-                      <button type="submit" className={buttonClasses("secondary", "sm")}>
-                        <Check className="size-3.5" />
-                        Conciliar
-                      </button>
-                    </form>
-                  </li>
-                );
-              })}
-            </ul>
+            <>
+              <p className="text-[11px] text-muted-foreground">
+                Marque um ou vários lançamentos que juntos formam esta linha do banco.
+              </p>
+              <ul className="max-h-56 space-y-1 overflow-y-auto">
+                {resultados.map((c) => {
+                  const mesmoValor = Math.abs(c.amount) === Math.abs(valorLinha);
+                  const marcado = sel.has(c.id);
+                  return (
+                    <li key={c.id}>
+                      <label
+                        className={cn(
+                          "flex cursor-pointer items-center gap-2 rounded-lg border p-2",
+                          marcado ? "border-primary bg-primary-subtle/40" : "border-border",
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={marcado}
+                          onChange={() => alternar(c.id)}
+                          className="size-4 shrink-0 accent-[var(--brand-teal)]"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-medium">{c.description}</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {d(c.date)} · {formatMoney(Math.abs(c.amount), currency)}
+                            {c.status === "pending" ? " · previsto" : " · realizado"}
+                            {mesmoValor && <span className="ml-1 font-semibold text-income">· mesmo valor</span>}
+                          </p>
+                        </div>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+
+              {sel.size > 0 && (
+                <form action={conciliarLinha} className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface-muted/40 p-2">
+                  <input type="hidden" name="linhaId" value={linhaId} />
+                  <input type="hidden" name="transactionIds" value={[...sel].join(",")} />
+                  <input type="hidden" name="accountId" value={accountId} />
+                  <span className="text-xs text-muted-foreground">
+                    {sel.size} selecionado{sel.size > 1 ? "s" : ""} · soma{" "}
+                    <strong className={cn("tabular", somaBate ? "text-income" : "text-foreground")}>
+                      {formatMoney(somaSel, currency)}
+                    </strong>
+                    {somaBate ? " · bate" : ` de ${formatMoney(Math.abs(valorLinha), currency)}`}
+                  </span>
+                  <button type="submit" className={buttonClasses("primary", "sm") + " ml-auto"}>
+                    <Check className="size-3.5" />
+                    Conciliar {sel.size > 1 ? "selecionados" : ""}
+                  </button>
+                </form>
+              )}
+            </>
           )}
         </div>
       )}

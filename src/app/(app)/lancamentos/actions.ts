@@ -309,12 +309,21 @@ export async function deleteTransaction(formData: FormData) {
   const { ledgerId } = await requireWriteAccess();
   const id = String(formData.get("id") ?? "");
 
-  // O filtro por ledger é o que impede apagar lançamento de outra pessoa.
-  await db
-    .delete(transactions)
-    .where(and(eq(transactions.id, id), eq(transactions.ledgerId, ledgerId)));
+  await db.transaction(async (trx) => {
+    // Se estava conciliado com uma linha do extrato, a linha volta para a fila
+    // (pendente): o extrato é o espelho e precisa reapontar o que sumiu.
+    await trx
+      .update(bankStatementLines)
+      .set({ status: "pendente", transactionId: null })
+      .where(and(eq(bankStatementLines.transactionId, id), eq(bankStatementLines.ledgerId, ledgerId)));
+    // O filtro por ledger é o que impede apagar lançamento de outra pessoa.
+    await trx
+      .delete(transactions)
+      .where(and(eq(transactions.id, id), eq(transactions.ledgerId, ledgerId)));
+  });
 
   revalidatePath("/lancamentos");
+  revalidatePath("/conciliacao");
   revalidatePath("/");
 }
 
