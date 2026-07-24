@@ -10,6 +10,7 @@ import {
   mensagemBloqueio,
 } from "@/lib/rate-limit";
 import { registrarAuditoria } from "@/lib/auditoria";
+import { enviarEmail, emailRecuperacaoSenha } from "@/lib/email";
 
 export type ResetState = { ok?: boolean; erro?: string; msg?: string };
 
@@ -38,8 +39,9 @@ export async function pedirReset(_prev: ResetState, formData: FormData): Promise
   if (token) {
     const base = process.env.APP_URL ?? "http://localhost:3000";
     const link = `${base}/redefinir-senha?token=${token}`;
-    // PROVISÓRIO (até a Fase 2 de e-mail): o link vai para o log do servidor.
-    console.log(`\n[RESET DE SENHA] ${email}\n  ${link}\n`);
+    // Envia por e-mail (Resend). Sem provedor configurado, cai no log — o app
+    // não bloqueia na fase de testes.
+    await enviarEmail({ to: email, ...emailRecuperacaoSenha(link) });
     await registrarAuditoria({ userEmail: email, action: "password_reset_requested" });
   }
 
