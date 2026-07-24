@@ -236,6 +236,27 @@ export const authAttempts = pgTable(
 );
 
 /**
+ * Registro de erros de servidor, para saber quando algo quebra em produção sem
+ * depender de olhar o log da máquina. Alimentado pelo hook onRequestError da
+ * instrumentação; visto pelo admin. Guardamos só o técnico (mensagem, stack,
+ * rota) — nada de dado financeiro.
+ */
+export const errorLog = pgTable(
+  "error_log",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    message: text("message").notNull(),
+    stack: text("stack"),
+    digest: text("digest"),
+    path: text("path"),
+    method: text("method"),
+    routeType: text("route_type"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("error_log_created_idx").on(t.createdAt)],
+);
+
+/**
  * Trilha de auditoria das ações sensíveis (login, troca de senha, 2FA, convites,
  * exclusões). Num app que guarda a vida financeira de alguém, poder responder
  * "quem fez o quê e quando" não é luxo.

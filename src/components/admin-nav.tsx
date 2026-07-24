@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, Ticket } from "lucide-react";
+import { LayoutDashboard, Users, Ticket, AlertTriangle } from "lucide-react";
 import { LogoMark } from "./logo";
 import { BetaBadge } from "./beta-badge";
 import { cn } from "./ui";
@@ -11,6 +11,7 @@ const ITENS = [
   { href: "/admin", label: "Painel", Icon: LayoutDashboard },
   { href: "/admin/usuarios", label: "Usuários", Icon: Users },
   { href: "/admin/convites", label: "Convites", Icon: Ticket },
+  { href: "/admin/erros", label: "Erros", Icon: AlertTriangle },
 ] as const;
 
 /** Navegação do console de administração. Enxuta: três destinos, sem finanças. */
