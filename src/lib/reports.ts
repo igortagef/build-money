@@ -123,8 +123,13 @@ export async function getBalanco(ledgerId: string) {
     getResumoPatrimonio(ledgerId),
   ]);
 
-  const contasAtivas = contas.filter((c) => c.balance >= 0);
-  const contasPassivas = contas.filter((c) => c.balance < 0);
+  // Só contas que entram no patrimônio. As piscinas internas (Investimentos e
+  // Rachas) têm includeInNetWorth=false: o valor do investimento já vem do
+  // asset e o da racha é reembolso pendente — contá-las aqui duplicaria o
+  // patrimônio (o mesmo dinheiro apareceria como caixa E como ativo).
+  const contasNoPatrimonio = contas.filter((c) => c.includeInNetWorth);
+  const contasAtivas = contasNoPatrimonio.filter((c) => c.balance >= 0);
+  const contasPassivas = contasNoPatrimonio.filter((c) => c.balance < 0);
 
   const caixa = contasAtivas.reduce((s, c) => s + c.balance, 0);
   const dividas = contasPassivas.reduce((s, c) => s + Math.abs(c.balance), 0);
