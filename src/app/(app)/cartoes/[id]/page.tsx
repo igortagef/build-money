@@ -108,6 +108,9 @@ function FaturaBloco({
               </span>
             </div>
             <p className="mt-0.5 text-xs text-muted-foreground">
+              Fecha em {dAno(fatura.closingDate)} · paga (caixa) em {dAno(fatura.dueDate)}
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
               Período {d(fatura.periodo.inicio)} – {d(fatura.periodo.fim)} · {fatura.qtdMovimentos}{" "}
               {fatura.qtdMovimentos === 1 ? "movimento" : "movimentos"}
             </p>

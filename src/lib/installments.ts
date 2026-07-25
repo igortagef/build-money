@@ -48,18 +48,22 @@ export function gerarParcelas(
   // splitEvenly distribui o resto nas primeiras: a soma bate com o total,
   // sem o clássico "R$ 100,00 em 3 = R$ 33,33 x 3 = R$ 99,99".
   const valores = splitEvenly(totalCentavos, parcelas);
-  const [ano, mes, dia] = primeiraData.split("-").map(Number);
+  const [, , dia] = primeiraData.split("-").map(Number);
+
+  // Caixa da 1ª parcela: no cartão, o vencimento da fatura que a contém. As
+  // demais caem UMA fatura por mês a partir dela — por isso somamos meses ao
+  // caixa da primeira, em vez de recalcular `calcularDataDeCaixa` sobre a
+  // competência de cada parcela. Esse recálculo sobre a data sintética colidia
+  // em fevereiro (dia cortado) e quando o dia da compra passava do fechamento,
+  // jogando duas parcelas na MESMA fatura e pulando um mês.
+  const primeiraCaixa = calcularDataDeCaixa(primeiraData, conta);
+  const [, , diaCaixa] = primeiraCaixa.split("-").map(Number);
 
   return valores.map((valor, i) => {
     // Mantém o dia do vencimento mês a mês, cortando em meses curtos.
-    const data =
-      i === 0 ? primeiraData : somarMeses(primeiraData, i, dia);
-    return {
-      numero: i + 1,
-      data,
-      dataCaixa: calcularDataDeCaixa(data, conta),
-      valor,
-    };
+    const data = i === 0 ? primeiraData : somarMeses(primeiraData, i, dia);
+    const dataCaixa = i === 0 ? primeiraCaixa : somarMeses(primeiraCaixa, i, diaCaixa);
+    return { numero: i + 1, data, dataCaixa, valor };
   });
 }
 
