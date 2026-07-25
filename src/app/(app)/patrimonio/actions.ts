@@ -61,15 +61,6 @@ export async function createAsset(
   // Para bem físico, "investido" não se aplica: o valor é só o atual.
   const investido = investimento ? d.invested : d.current;
 
-  // Foto (só para bem): data URL já reduzida no navegador. Aceita jpeg/png/webp
-  // com limite de tamanho — é detalhe visual, não álbum.
-  const fotoRaw = String(formData.get("foto") ?? "");
-  const RE_FOTO = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/;
-  let imageUrl: string | null = null;
-  if (!investimento && fotoRaw) {
-    const bytes = Math.floor((fotoRaw.slice(fotoRaw.indexOf(",") + 1).length * 3) / 4);
-    if (RE_FOTO.test(fotoRaw) && bytes <= 500_000) imageUrl = fotoRaw;
-  }
   // O tipo de bem editável só vale para bem; precisa ser deste espaço.
   let assetKindId: string | null = null;
   if (!investimento && d.assetKindId) {
@@ -95,7 +86,6 @@ export async function createAsset(
         detail: d.detail ?? null,
         investedValue: investido,
         currentValue: d.current,
-        imageUrl,
       })
       .returning({ id: assets.id });
 

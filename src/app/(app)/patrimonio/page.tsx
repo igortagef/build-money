@@ -239,14 +239,9 @@ export default async function PatrimonioPage(props: {
               <div className="space-y-2">
                 {bens.map((a) => (
                   <Card key={a.id} className="flex items-center gap-3 p-4">
-                    {a.imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={a.imageUrl} alt={a.name} className="size-12 shrink-0 rounded-lg object-cover" />
-                    ) : (
-                      <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary-subtle text-primary-text" aria-hidden>
-                        <Home className="size-4" />
-                      </span>
-                    )}
+                    <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary-subtle text-primary-text" aria-hidden>
+                      <Home className="size-4" />
+                    </span>
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium">{a.name}</p>
                       <p className="truncate text-xs text-muted-foreground">

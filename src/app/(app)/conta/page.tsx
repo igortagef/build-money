@@ -1,22 +1,12 @@
-import { Download, ShieldCheck, User, AlertTriangle, Camera } from "lucide-react";
-import { eq } from "drizzle-orm";
-import { db } from "@/db";
-import { users } from "@/db/schema";
+import { Download, ShieldCheck, User, AlertTriangle } from "lucide-react";
 import { requireContaAccess } from "@/lib/auth";
 import { buttonClasses, Card } from "@/components/ui";
 import { ExcluirContaForm } from "./excluir-form";
-import { FotoPerfilForm } from "./foto-form";
 
 export const metadata = { title: "Minha conta · Build Money" };
 
 export default async function ContaPage() {
-  const { userId, userName, userEmail, deactivated } = await requireContaAccess();
-
-  const [perfil] = await db
-    .select({ imageUrl: users.imageUrl })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
+  const { userName, userEmail, deactivated } = await requireContaAccess();
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -30,17 +20,6 @@ export default async function ContaPage() {
           {userEmail}
         </p>
       </div>
-
-      {/* Foto de perfil (não aparece para conta inativa, que só exporta/exclui) */}
-      {!deactivated && (
-        <Card className="space-y-3 p-5">
-          <h2 className="flex items-center gap-2 font-semibold">
-            <Camera className="size-4 text-primary-text" />
-            Foto de perfil
-          </h2>
-          <FotoPerfilForm name={userName} email={userEmail} imageUrl={perfil?.imageUrl ?? null} />
-        </Card>
-      )}
 
       {/* Portabilidade */}
       <Card className="space-y-3 p-5">

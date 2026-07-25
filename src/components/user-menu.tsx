@@ -9,11 +9,9 @@ import { Avatar } from "./avatar";
 export function UserMenu({
   name,
   email,
-  imageUrl,
 }: {
   name: string | null;
   email: string;
-  imageUrl?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -44,7 +42,7 @@ export function UserMenu({
         aria-label="Abrir menu da conta"
         className="rounded-full transition-opacity hover:opacity-80"
       >
-        <Avatar name={name} email={email} imageUrl={imageUrl} className="size-8 text-xs" />
+        <Avatar name={name} email={email} className="size-8 text-xs" />
       </button>
 
       {open && (
@@ -53,7 +51,7 @@ export function UserMenu({
           className="absolute right-0 top-10 w-56 rounded-card border border-border bg-surface p-1 shadow-lg"
         >
           <div className="flex items-center gap-2.5 border-b border-border px-3 py-2.5">
-            <Avatar name={name} email={email} imageUrl={imageUrl} className="size-9 text-sm" />
+            <Avatar name={name} email={email} className="size-9 text-sm" />
             <div className="min-w-0">
               {name && <p className="truncate text-sm font-medium">{name}</p>}
               <p className="truncate text-xs text-muted-foreground">{email}</p>

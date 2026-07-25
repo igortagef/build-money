@@ -9,32 +9,19 @@ function iniciais(name: string | null, email: string) {
 }
 
 /**
- * Avatar da pessoa: mostra a foto de perfil quando há uma, senão as iniciais.
- * O tamanho vem por `className` (ex.: "size-8 text-xs"). A foto é guardada como
- * data URL no próprio usuário, então entra direto no src.
+ * Avatar da pessoa: mostra as iniciais do nome (ou do e-mail). Sem foto — o app
+ * não guarda imagem de perfil, para manter o banco e as páginas leves.
+ * O tamanho vem por `className` (ex.: "size-8 text-xs").
  */
 export function Avatar({
   name,
   email,
-  imageUrl,
   className,
 }: {
   name: string | null;
   email: string;
-  imageUrl?: string | null;
   className?: string;
 }) {
-  if (imageUrl) {
-    return (
-      // Data URL local (não é imagem remota); next/image não se aplica aqui.
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={imageUrl}
-        alt={name ?? email}
-        className={cn("shrink-0 rounded-full object-cover", className)}
-      />
-    );
-  }
   return (
     <span
       aria-hidden
