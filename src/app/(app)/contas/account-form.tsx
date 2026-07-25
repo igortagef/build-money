@@ -2,12 +2,9 @@
 
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { ChevronDown } from "lucide-react";
 import { createAccount, updateAccount, type AccountFormState } from "./actions";
-import { Alert, Button, Card, Field, Input, Select, cn } from "@/components/ui";
+import { Alert, Button, Card, Field, Input, Select } from "@/components/ui";
 import { CURRENCIES } from "@/lib/money";
-import { BANCOS } from "@/lib/banks";
-import { BankIcon } from "@/components/bank-icon";
 import type { AccountType, CurrencyCode } from "@/db/schema";
 
 const TYPES = [
@@ -27,7 +24,6 @@ export type AccountInitial = {
   creditLimit: number | null;
   statementClosingDay: number | null;
   paymentDueDay: number | null;
-  bankId: string;
 };
 
 const centavosParaInput = (c: number) => (c / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -59,23 +55,8 @@ export function AccountForm({
   const [type, setType] = useState<string>(initial?.type ?? "checking");
   const [nome, setNome] = useState(initial?.name ?? "");
   const [instituicao, setInstituicao] = useState(initial?.institution ?? "");
-  const [bancoId, setBancoId] = useState(initial?.bankId ?? "");
 
   const isCreditCard = type === "credit_card";
-  const bancoSel = BANCOS.find((b) => b.id === bancoId);
-
-  const escolherBanco = (id: string) => {
-    if (id === bancoId) {
-      setBancoId("");
-      return;
-    }
-    const b = BANCOS.find((x) => x.id === id);
-    setBancoId(id);
-    if (b) {
-      setInstituicao(b.nome);
-      if (!nome.trim()) setNome(b.nome);
-    }
-  };
 
   return (
     <Card className="p-6">
@@ -94,44 +75,6 @@ export function AccountForm({
             invalid={!!state.fieldErrors?.name}
           />
         </Field>
-
-        {/* Banco (logo + cor): recolhido numa seção, para não pesar o formulário. */}
-        <details className="group rounded-lg border border-border">
-          <summary className="flex cursor-pointer list-none items-center gap-2 p-3 text-sm">
-            {bancoSel ? (
-              <>
-                <BankIcon bankId={bancoSel.id} size="sm" className="size-6 text-[9px]" />
-                <span className="font-medium">{bancoSel.nome}</span>
-                <span className="text-xs text-muted-foreground">— logo e cor</span>
-              </>
-            ) : (
-              <span className="text-muted-foreground">Logo e cor do banco (opcional)</span>
-            )}
-            <ChevronDown className="ml-auto size-4 text-muted-foreground transition-transform group-open:rotate-180" />
-          </summary>
-          <div className="border-t border-border p-3">
-            <div className="flex flex-wrap gap-2">
-              {BANCOS.map((b) => (
-                <button
-                  key={b.id}
-                  type="button"
-                  onClick={() => escolherBanco(b.id)}
-                  aria-pressed={bancoId === b.id}
-                  title={b.nome}
-                  className={cn(
-                    "flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm transition-colors",
-                    bancoId === b.id ? "border-primary bg-primary-subtle text-primary-text" : "border-border hover:border-border-strong",
-                  )}
-                >
-                  <BankIcon bankId={b.id} size="sm" className="size-6 text-[9px]" />
-                  {b.nome}
-                </button>
-              ))}
-            </div>
-          </div>
-        </details>
-        <input type="hidden" name="bank" value={bancoId} />
-        <input type="hidden" name="color" value={bancoSel?.cor ?? ""} />
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Tipo" htmlFor="type" error={state.fieldErrors?.type}>

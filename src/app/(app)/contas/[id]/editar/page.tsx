@@ -49,7 +49,6 @@ export default async function EditarContaPage(props: { params: Promise<{ id: str
           creditLimit: conta.creditLimit,
           statementClosingDay: conta.statementClosingDay,
           paymentDueDay: conta.paymentDueDay,
-          bankId: conta.icon ?? "",
         }}
       />
 

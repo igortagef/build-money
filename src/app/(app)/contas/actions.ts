@@ -9,7 +9,6 @@ import { accounts, reimbursables, transactions } from "@/db/schema";
 import { requireWriteAccess } from "@/lib/auth";
 import { parseMoney } from "@/lib/money";
 import { aoCadastrarConta, semQuebrar } from "@/lib/gamification";
-import { BANCOS } from "@/lib/banks";
 
 export type AccountFormState = {
   error?: string;
@@ -84,13 +83,6 @@ export async function createAccount(
   const data = parsed.data;
   const today = new Date().toISOString().slice(0, 10);
 
-  // Banco escolhido (guardado em `icon`) e sua cor de marca (em `color`). Só
-  // aceita ids do catálogo, para não guardar valor arbitrário.
-  const bankRaw = String(formData.get("bank") ?? "");
-  const bancoId = BANCOS.some((b) => b.id === bankRaw) ? bankRaw : null;
-  const corRaw = String(formData.get("color") ?? "").trim();
-  const color = /^#[0-9a-fA-F]{6}$/.test(corRaw) ? corRaw : null;
-
   await db.insert(accounts).values({
     ledgerId,
     name: data.name,
@@ -103,8 +95,6 @@ export async function createAccount(
     statementClosingDay:
       data.type === "credit_card" ? data.statementClosingDay : null,
     paymentDueDay: data.type === "credit_card" ? data.paymentDueDay : null,
-    icon: bancoId,
-    color,
   });
 
   await semQuebrar(() => aoCadastrarConta(userId, ledgerId));
@@ -153,11 +143,6 @@ export async function updateAccount(
   }
   const data = parsed.data;
 
-  const bankRaw = String(formData.get("bank") ?? "");
-  const bancoId = BANCOS.some((b) => b.id === bankRaw) ? bankRaw : null;
-  const corRaw = String(formData.get("color") ?? "").trim();
-  const color = /^#[0-9a-fA-F]{6}$/.test(corRaw) ? corRaw : null;
-
   await db
     .update(accounts)
     .set({
@@ -169,8 +154,6 @@ export async function updateAccount(
       creditLimit: data.type === "credit_card" ? data.creditLimit : null,
       statementClosingDay: data.type === "credit_card" ? data.statementClosingDay : null,
       paymentDueDay: data.type === "credit_card" ? data.paymentDueDay : null,
-      icon: bancoId,
-      color,
     })
     .where(and(eq(accounts.id, id), eq(accounts.ledgerId, ledgerId)));
 
