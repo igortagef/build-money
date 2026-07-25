@@ -15,7 +15,7 @@ function SubmitButton() {
   );
 }
 
-export function SignUpForm() {
+export function SignUpForm({ exigeConvite = true }: { exigeConvite?: boolean }) {
   const [state, formAction] = useActionState<FormState, FormData>(signUp, {});
 
   return (
@@ -71,21 +71,23 @@ export function SignUpForm() {
         </Field>
 
         {/* Beta fechado: o acesso é por convite. O primeiro usuário do sistema
-            (o dono) é a única exceção, tratada no servidor. */}
-        <Field
-          label="Código do convite"
-          htmlFor="convite"
-          hint="Você recebeu ao ser convidado. Formato BM-XXXXX-XXXXX."
-          error={state.fieldErrors?.convite}
-        >
-          <Input
-            id="convite"
-            name="convite"
-            placeholder="BM-XXXXX-XXXXX"
-            autoCapitalize="characters"
-            invalid={!!state.fieldErrors?.convite}
-          />
-        </Field>
+            (o dono) é a única exceção — nesse caso o campo nem aparece. */}
+        {exigeConvite && (
+          <Field
+            label="Código do convite"
+            htmlFor="convite"
+            hint="Você recebeu ao ser convidado. Formato BM-XXXXX-XXXXX."
+            error={state.fieldErrors?.convite}
+          >
+            <Input
+              id="convite"
+              name="convite"
+              placeholder="BM-XXXXX-XXXXX"
+              autoCapitalize="characters"
+              invalid={!!state.fieldErrors?.convite}
+            />
+          </Field>
+        )}
 
         <SubmitButton />
 

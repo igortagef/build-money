@@ -2,13 +2,17 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getAccess } from "@/lib/auth";
 import { TriangleAlert } from "lucide-react";
-import { cadastroAbertoPorConfig } from "@/lib/convites";
+import { cadastroAbertoPorConfig, sistemaVazio } from "@/lib/convites";
 import { SignUpForm } from "./form";
 
 export const metadata = { title: "Criar conta · Build Money" };
 
 export default async function CadastrarPage() {
   if (await getAccess()) redirect("/");
+
+  // O primeiro usuário (dono) entra sem convite — não faz sentido mostrar o
+  // campo pra ele. Cadastro aberto (testes) também dispensa o código.
+  const exigeConvite = !(await sistemaVazio()) && !cadastroAbertoPorConfig();
 
   return (
     <div className="space-y-6">
@@ -31,7 +35,7 @@ export default async function CadastrarPage() {
         </div>
       )}
 
-      <SignUpForm />
+      <SignUpForm exigeConvite={exigeConvite} />
 
       <p className="text-center text-sm text-muted-foreground">
         Já tem conta?{" "}
