@@ -5,16 +5,17 @@ module.exports = {
   apps: [
     {
       name: "build-money",
-      // Roda o servidor de produção do Next.js (next start) na porta 3000.
+      // Roda o servidor de produção do Next.js (next start) na porta 3005.
+      // 3000/3001 já são usadas por outros apps da AG&F neste VPS.
       script: "node_modules/next/dist/bin/next",
-      args: "start -p 3000",
+      args: "start -p 3005",
       cwd: __dirname + "/..",
       instances: 1,
       autorestart: true,
       max_memory_restart: "600M",
       env: {
         NODE_ENV: "production",
-        PORT: "3000",
+        PORT: "3005",
       },
     },
   ],
