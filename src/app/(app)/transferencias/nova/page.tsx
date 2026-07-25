@@ -27,7 +27,10 @@ export default async function NovaTransferenciaPage(props: {
     .where(and(
         eq(accounts.ledgerId, ledgerId),
         isNull(accounts.archivedAt),
+        // As piscinas internas (rachas e investimentos) não entram: aportes e
+        // resgates são feitos no Patrimônio, que mantém o ativo em sincronia.
         eq(accounts.isReimbursementPool, false),
+        eq(accounts.isInvestmentPool, false),
       ))
     .orderBy(asc(accounts.name));
 

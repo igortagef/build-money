@@ -16,6 +16,7 @@ import { buttonClasses, Card, cn } from "@/components/ui";
 import { WealthChart } from "./wealth-chart";
 import { ValorAtualEditavel, DeleteAssetButton } from "./update-value";
 import { AporteForm } from "./aporte-form";
+import { ResgateForm } from "./resgate-form";
 
 export const metadata = { title: "Patrimônio · Build Money" };
 
@@ -329,7 +330,10 @@ function AtivoCard({
         <span>Hoje {formatMoney(ativo.currentValue, currency)}</span>
       </div>
 
-      <AporteForm assetId={ativo.id} currency={currency} contas={contas} metas={metas} hoje={hoje} />
+      <div className="flex flex-wrap items-center gap-2">
+        <AporteForm assetId={ativo.id} currency={currency} contas={contas} metas={metas} hoje={hoje} />
+        <ResgateForm assetId={ativo.id} currency={currency} contas={contas} hoje={hoje} />
+      </div>
     </Card>
   );
 }

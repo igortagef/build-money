@@ -136,6 +136,19 @@ export async function deleteTransfer(formData: FormData) {
   const par = String(formData.get("pairId") ?? "");
   if (!par) return;
 
+  // Pernas que tocam uma conta-piscina são aporte/resgate (Investimentos) ou
+  // racha (Reembolsos): estão amarradas a um ativo/racha. Apagá-las aqui
+  // deixaria o ativo inflado — o certo é gerenciar no Patrimônio/Rachas.
+  const pernas = await db
+    .select({
+      isInvestmentPool: accounts.isInvestmentPool,
+      isReimbursementPool: accounts.isReimbursementPool,
+    })
+    .from(transactions)
+    .innerJoin(accounts, eq(accounts.id, transactions.accountId))
+    .where(and(eq(transactions.ledgerId, ledgerId), eq(transactions.transferPairId, par)));
+  if (pernas.some((p) => p.isInvestmentPool || p.isReimbursementPool)) return;
+
   await db
     .delete(transactions)
     .where(

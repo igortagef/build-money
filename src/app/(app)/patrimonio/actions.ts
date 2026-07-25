@@ -323,6 +323,113 @@ export async function aportarInvestimento(
   return {};
 }
 
+const resgateSchema = z.object({
+  assetId: z.string().uuid(),
+  contaDestinoId: z.string().uuid("Escolha a conta que recebeu o dinheiro"),
+  valor: z.number().int().positive("Informe um valor maior que zero"),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida"),
+});
+
+/**
+ * Resgate de um investimento — o inverso do aporte. Cria uma TRANSFERÊNCIA da
+ * conta "Investimentos" para a conta escolhida (conciliável com o extrato),
+ * baixa o valor de mercado do ativo (currentValue) e reduz a base aportada
+ * (investedValue) na MESMA proporção resgatada, para o rendimento do que sobra
+ * continuar coerente (resgate parcial realiza ganho proporcional). O patrimônio
+ * não muda: o que era investimento vira caixa.
+ */
+export async function resgatarInvestimento(
+  _prev: AssetState,
+  formData: FormData,
+): Promise<AssetState> {
+  const { ledgerId, userId } = await requireWriteAccess();
+
+  const parsed = resgateSchema.safeParse({
+    assetId: formData.get("assetId"),
+    contaDestinoId: formData.get("contaDestinoId"),
+    valor: parseMoney(String(formData.get("valor") ?? "")) ?? 0,
+    date: String(formData.get("date") ?? ""),
+  });
+  if (!parsed.success) return { fieldErrors: erros(parsed.error) };
+  const d = parsed.data;
+
+  const [ativo] = await db
+    .select({
+      id: assets.id,
+      name: assets.name,
+      kind: assets.kind,
+      invested: assets.investedValue,
+      current: assets.currentValue,
+    })
+    .from(assets)
+    .where(and(eq(assets.id, d.assetId), eq(assets.ledgerId, ledgerId)))
+    .limit(1);
+  if (!ativo || !ehInvestimento(ativo.kind)) return { error: "Investimento não encontrado." };
+  if (d.valor > ativo.current) {
+    return { fieldErrors: { valor: "Você não pode resgatar mais do que o valor atual." } };
+  }
+
+  const [destino] = await db
+    .select({ id: accounts.id, currency: accounts.currency })
+    .from(accounts)
+    .where(
+      and(
+        eq(accounts.id, d.contaDestinoId),
+        eq(accounts.ledgerId, ledgerId),
+        eq(accounts.isReimbursementPool, false),
+        eq(accounts.isInvestmentPool, false),
+      ),
+    )
+    .limit(1);
+  if (!destino) return { fieldErrors: { contaDestinoId: "Conta inválida" } };
+
+  await db.transaction(async (trx) => {
+    const investimentosId = await garantirContaInvestimentos(trx, ledgerId, destino.currency);
+    const par = crypto.randomUUID();
+    const descricao = `Resgate: ${ativo.name}`;
+
+    await trx.insert(transactions).values([
+      {
+        ledgerId, accountId: investimentosId, createdByUserId: userId, type: "transfer",
+        status: "cleared", amount: -d.valor, currency: destino.currency, amountBase: -d.valor,
+        description: descricao, date: d.date, settlementDate: d.date, transferPairId: par,
+      },
+      {
+        ledgerId, accountId: destino.id, createdByUserId: userId, type: "transfer",
+        status: "cleared", amount: d.valor, currency: destino.currency, amountBase: d.valor,
+        description: descricao, date: d.date, settlementDate: d.date, transferPairId: par,
+      },
+    ]);
+
+    // Baixa o ativo: o valor de mercado sai do currentValue; a base aportada cai
+    // na mesma proporção resgatada.
+    const fracaoRestante = ativo.current > 0 ? (ativo.current - d.valor) / ativo.current : 0;
+    const novoInvestido = Math.max(0, Math.round(ativo.invested * fracaoRestante));
+    const novoAtual = ativo.current - d.valor;
+    await trx
+      .update(assets)
+      .set({ investedValue: novoInvestido, currentValue: novoAtual, updatedAt: new Date() })
+      .where(eq(assets.id, ativo.id));
+
+    // Snapshot do dia (um por dia; resgatar de novo no mesmo dia sobrescreve).
+    const [snap] = await trx
+      .select({ id: assetSnapshots.id })
+      .from(assetSnapshots)
+      .where(and(eq(assetSnapshots.assetId, ativo.id), eq(assetSnapshots.date, d.date)))
+      .limit(1);
+    if (snap) {
+      await trx.update(assetSnapshots).set({ value: novoAtual }).where(eq(assetSnapshots.id, snap.id));
+    } else {
+      await trx.insert(assetSnapshots).values({ assetId: ativo.id, value: novoAtual, date: d.date });
+    }
+  });
+
+  revalidatePath("/patrimonio");
+  revalidatePath("/conciliacao");
+  revalidatePath("/");
+  return {};
+}
+
 export async function deleteAsset(formData: FormData) {
   const { ledgerId } = await requireWriteAccess();
   const id = String(formData.get("id") ?? "");

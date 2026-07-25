@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { CalendarClock, Pencil, Plus, Repeat, Table, Upload } from "lucide-react";
-import { and, asc, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   accounts,
@@ -227,6 +227,31 @@ export default async function LancamentosPage(props: {
     .groupBy(transactions.id, accounts.name)
     .orderBy(desc(transactions.date), desc(transactions.createdAt));
 
+  // Transferências cujas pernas tocam uma piscina (aporte/resgate, racha) não
+  // podem ser apagadas soltas na lista — isso deixaria o ativo/racha inflado.
+  // Elas se gerenciam no Patrimônio/Rachas; aqui só escondemos o botão.
+  const pares = [...new Set(linhas.map((l) => l.transferPairId).filter(Boolean) as string[])];
+  const paresPiscina = pares.length
+    ? new Set(
+        (
+          await db
+            .selectDistinct({ par: transactions.transferPairId })
+            .from(transactions)
+            .innerJoin(accounts, eq(accounts.id, transactions.accountId))
+            .where(
+              and(
+                eq(transactions.ledgerId, ledgerId),
+                inArray(transactions.transferPairId, pares),
+                or(
+                  eq(accounts.isInvestmentPool, true),
+                  eq(accounts.isReimbursementPool, true),
+                ),
+              ),
+            )
+        ).map((r) => r.par),
+      )
+    : new Set<string>();
+
   const receitas = linhas
     .filter((l) => l.type === "income" && l.status !== "pending")
     .reduce((s, l) => s + l.amountBase, 0);
@@ -449,11 +474,15 @@ export default async function LancamentosPage(props: {
 
               {l.type === "transfer" ? (
                 // Transferência não se edita nem concilia peça a peça: apagar
-                // remove as duas pernas juntas.
-                <TransferDeleteButton
-                  pairId={l.transferPairId!}
-                  descricao={l.description}
-                />
+                // remove as duas pernas juntas. Exceto aporte/resgate/racha
+                // (tocam piscina): esses se gerenciam no Patrimônio/Rachas, para
+                // não deixar o ativo órfão — aqui não mostramos o botão.
+                paresPiscina.has(l.transferPairId!) ? null : (
+                  <TransferDeleteButton
+                    pairId={l.transferPairId!}
+                    descricao={l.description}
+                  />
+                )
               ) : (
                 <>
                   {/* Previsto se confirma; realizado se concilia. São etapas
