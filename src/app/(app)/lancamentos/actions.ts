@@ -10,7 +10,7 @@ import { requireWriteAccess } from "@/lib/auth";
 import { parseMoney, convertMoney } from "@/lib/money";
 import { transactionInputSchema } from "@/lib/transactions";
 import { aoConciliar, aoRegistrarLancamento, semQuebrar } from "@/lib/gamification";
-import { calcularDataDeCaixa } from "@/lib/statement";
+import { resolverDataDeCaixa } from "@/lib/statement";
 
 export type TxFormState = {
   error?: string;
@@ -43,7 +43,13 @@ async function validarLancamento(
   ledgerId: string,
   formData: FormData,
 ): Promise<
-  | { ok: true; conta: Conta; tx: import("@/lib/transactions").TransactionInput; paraBase: number }
+  | {
+      ok: true;
+      conta: Conta;
+      tx: import("@/lib/transactions").TransactionInput;
+      paraBase: number;
+      settlementDate: string;
+    }
   | { ok: false; state: TxFormState }
 > {
   const rawSplits = JSON.parse(String(formData.get("splits") ?? "[]"));
@@ -141,7 +147,13 @@ async function validarLancamento(
     return { ok: false, state: { fieldErrors, splitError } };
   }
 
-  return { ok: true, conta: account, tx: parsed.data, paraBase: taxa };
+  // Data de caixa: no cartão é o vencimento da fatura que contém a compra. O
+  // usuário pode ter escolhido outra fatura (name="faturaVencimento"); a função
+  // só aceita um vencimento candidato, senão cai no cálculo automático.
+  const faturaEscolhida = String(formData.get("faturaVencimento") ?? "").trim() || null;
+  const settlementDate = resolverDataDeCaixa(parsed.data.date, account, faturaEscolhida);
+
+  return { ok: true, conta: account, tx: parsed.data, paraBase: taxa, settlementDate };
 }
 
 export async function createTransaction(
@@ -175,9 +187,9 @@ export async function createTransaction(
         description: tx.description,
         notes: tx.notes ?? null,
         date: tx.date,
-        // Data de caixa: no cartão é o vencimento da fatura que contém a
-        // compra; nas demais contas é a própria data do lançamento.
-        settlementDate: calcularDataDeCaixa(tx.date, account),
+        // Vencimento da fatura (cartão) ou a própria data (demais contas),
+        // já respeitando a fatura escolhida no formulário.
+        settlementDate: v.settlementDate,
         counterparty: tx.counterparty ?? null,
       })
       .returning({ id: transactions.id });
@@ -262,7 +274,7 @@ export async function updateTransaction(
         description: tx.description,
         notes: tx.notes ?? null,
         date: tx.date,
-        settlementDate: calcularDataDeCaixa(tx.date, account),
+        settlementDate: v.settlementDate,
         counterparty: tx.counterparty ?? null,
         updatedAt: new Date(),
       })

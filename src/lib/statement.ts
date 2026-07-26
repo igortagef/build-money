@@ -1,3 +1,5 @@
+import { somarMeses } from "./recurrence";
+
 /**
  * Competência x caixa.
  *
@@ -138,6 +140,59 @@ export function calcularDataDeCaixa(
     conta.statementClosingDay,
     conta.paymentDueDay,
   );
+}
+
+/**
+ * Vencimentos de fatura candidatos para uma compra: o automático (sugerido) e
+ * alguns vizinhos. Serve para o usuário CORRIGIR o ciclo quando o banco lançou a
+ * compra numa fatura diferente da calculada (comum perto do fechamento ou quando
+ * a loja processa com atraso). Fonte única para o seletor (cliente) e a
+ * validação (servidor), então o valor escolhido sempre é um dos daqui.
+ */
+export function faturasCandidatas(
+  dataCompra: string,
+  diaFechamento: number,
+  diaVencimento: number,
+  antes = 1,
+  depois = 2,
+): { dueDate: string; auto: boolean }[] {
+  const auto = dataDePagamentoDaFatura(dataCompra, diaFechamento, diaVencimento);
+  const lista: { dueDate: string; auto: boolean }[] = [];
+  for (let i = -antes; i <= depois; i++) {
+    lista.push({ dueDate: somarMeses(auto, i, diaVencimento), auto: i === 0 });
+  }
+  return lista;
+}
+
+/**
+ * Data de caixa de uma compra, considerando uma fatura escolhida pelo usuário.
+ * Sem escolha (ou fora do cartão), cai no cálculo automático. A escolha só vale
+ * se for um dos vencimentos candidatos — assim um POST não injeta data qualquer.
+ */
+export function resolverDataDeCaixa(
+  dataCompetencia: string,
+  conta: {
+    type: string;
+    statementClosingDay: number | null;
+    paymentDueDay: number | null;
+  },
+  faturaEscolhida?: string | null,
+): string {
+  const auto = calcularDataDeCaixa(dataCompetencia, conta);
+  if (
+    !faturaEscolhida ||
+    conta.type !== "credit_card" ||
+    !conta.statementClosingDay ||
+    !conta.paymentDueDay
+  ) {
+    return auto;
+  }
+  const candidatos = faturasCandidatas(
+    dataCompetencia,
+    conta.statementClosingDay,
+    conta.paymentDueDay,
+  ).map((f) => f.dueDate);
+  return candidatos.includes(faturaEscolhida) ? faturaEscolhida : auto;
 }
 
 export type Regime = "competencia" | "caixa";

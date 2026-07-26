@@ -21,9 +21,17 @@ import {
   NovaContaInline,
   NovaCategoriaInline,
 } from "./quick-create";
+import { FaturaSelect } from "@/components/fatura-select";
 import type { CurrencyCode } from "@/db/schema";
 
-type Conta = { id: string; name: string; currency: CurrencyCode };
+type Conta = {
+  id: string;
+  name: string;
+  currency: CurrencyCode;
+  type: string;
+  statementClosingDay: number | null;
+  paymentDueDay: number | null;
+};
 type Categoria = { id: string; label: string; type: "income" | "expense" };
 
 type Linha = { key: number; categoryId: string; amount: string };
@@ -39,6 +47,8 @@ export type LancamentoInicial = {
   status: string;
   rateado: boolean;
   splits: { categoryId: string; amount: string }[];
+  /** Vencimento da fatura já gravado (cartão), para pré-selecionar o seletor. */
+  faturaVencimento?: string | null;
 };
 
 let proximaChave = 1;
@@ -92,6 +102,7 @@ export function NewTransactionForm({
     inicial?.contaId ?? contasIniciais[0]?.id ?? "",
   );
   const [valor, setValor] = useState(inicial?.valor ?? "");
+  const [data, setData] = useState(inicial?.data ?? hoje);
   // Baixa de um previsto: começa desmarcada (o previsto continua previsto até
   // o usuário confirmar que pagou).
   const [pago, setPago] = useState(false);
@@ -286,12 +297,34 @@ export function NewTransactionForm({
               id="date"
               name="date"
               type="date"
-              defaultValue={hoje}
+              value={data}
+              onChange={(e) => setData(e.target.value)}
               required
               invalid={!!state.fieldErrors?.date}
             />
           </Field>
         </div>
+
+        {/* Cartão de crédito: a compra (competência) cai numa fatura, que sai da
+            conta no vencimento (caixa). O ciclo é calculado pela data, mas o
+            usuário pode corrigir a fatura quando o banco lançou noutra. */}
+        {conta?.type === "credit_card" &&
+          conta.statementClosingDay &&
+          conta.paymentDueDay && (
+            <Field
+              label="Fatura"
+              htmlFor="faturaVencimento"
+              hint="Em qual fatura esta compra entra. A sugerida vem da data; ajuste se o banco lançou noutra."
+            >
+              <FaturaSelect
+                id="faturaVencimento"
+                dataCompra={data}
+                diaFechamento={conta.statementClosingDay}
+                diaVencimento={conta.paymentDueDay}
+                valorInicial={inicial?.faturaVencimento}
+              />
+            </Field>
+          )}
 
         {precisaTaxa && (
           <Field

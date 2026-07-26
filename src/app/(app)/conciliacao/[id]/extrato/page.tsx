@@ -160,6 +160,17 @@ export default async function ConciliarExtratoPage(props: {
                       categorias={catsDaLinha}
                       contas={contasDestino}
                       candidatos={candidatos}
+                      dataLinha={l.date}
+                      cartao={
+                        conta.type === "credit_card" &&
+                        conta.statementClosingDay &&
+                        conta.paymentDueDay
+                          ? {
+                              diaFechamento: conta.statementClosingDay,
+                              diaVencimento: conta.paymentDueDay,
+                            }
+                          : null
+                      }
                     />
                   </div>
                 </div>

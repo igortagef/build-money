@@ -29,6 +29,7 @@ export default async function EditarLancamentoPage(props: {
       amount: transactions.amount,
       description: transactions.description,
       date: transactions.date,
+      settlementDate: transactions.settlementDate,
     })
     .from(transactions)
     .where(and(eq(transactions.id, id), eq(transactions.ledgerId, ledgerId)))
@@ -50,7 +51,14 @@ export default async function EditarLancamentoPage(props: {
     .orderBy(asc(transactionSplits.sortOrder));
 
   const contas = await db
-    .select({ id: accounts.id, name: accounts.name, currency: accounts.currency })
+    .select({
+      id: accounts.id,
+      name: accounts.name,
+      currency: accounts.currency,
+      type: accounts.type,
+      statementClosingDay: accounts.statementClosingDay,
+      paymentDueDay: accounts.paymentDueDay,
+    })
     .from(accounts)
     .where(and(
         eq(accounts.ledgerId, ledgerId),
@@ -93,6 +101,7 @@ export default async function EditarLancamentoPage(props: {
       categoryId: s.categoryId ?? "",
       amount: paraCampo(s.amount),
     })),
+    faturaVencimento: tx.settlementDate,
   };
 
   return (

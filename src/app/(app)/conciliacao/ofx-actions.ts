@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { accounts, bankStatementLines, transactions, transactionSplits } from "@/db/schema";
 import { requireWriteAccess } from "@/lib/auth";
-import { calcularDataDeCaixa } from "@/lib/statement";
+import { resolverDataDeCaixa } from "@/lib/statement";
 import { importarExtratoParaConciliacao } from "@/lib/conciliacao-ofx";
 
 export type ImportState = { ok?: boolean; erro?: string; msg?: string };
@@ -109,6 +109,7 @@ export async function criarEConciliar(formData: FormData): Promise<void> {
   const accountId = String(formData.get("accountId") ?? "");
   const descricao = String(formData.get("descricao") ?? "").trim();
   const categoryId = String(formData.get("categoryId") ?? "");
+  const faturaEscolhida = String(formData.get("faturaVencimento") ?? "").trim() || null;
   if (!linhaId || !descricao) return;
 
   const [linha] = await db
@@ -145,7 +146,7 @@ export async function criarEConciliar(formData: FormData): Promise<void> {
         amountBase: valor,
         description: descricao,
         date: linha.date,
-        settlementDate: conta ? calcularDataDeCaixa(linha.date, conta) : linha.date,
+        settlementDate: conta ? resolverDataDeCaixa(linha.date, conta, faturaEscolhida) : linha.date,
       })
       .returning({ id: transactions.id });
 

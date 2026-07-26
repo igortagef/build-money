@@ -6,6 +6,7 @@ import { conciliarLinha, criarEConciliar, criarTransferenciaEConciliar } from ".
 import type { CandidatoBusca } from "@/lib/conciliacao-ofx";
 import { formatMoney } from "@/lib/money";
 import { buttonClasses, cn } from "@/components/ui";
+import { FaturaSelect } from "@/components/fatura-select";
 import type { CurrencyCode } from "@/db/schema";
 
 type Categoria = { id: string; label: string };
@@ -39,6 +40,8 @@ export function PainelConciliacao({
   categorias,
   contas,
   candidatos,
+  dataLinha,
+  cartao,
 }: {
   linhaId: string;
   accountId: string;
@@ -50,6 +53,8 @@ export function PainelConciliacao({
   categorias: Categoria[];
   contas: Conta[];
   candidatos: CandidatoBusca[];
+  dataLinha: string;
+  cartao: { diaFechamento: number; diaVencimento: number } | null;
 }) {
   const [aba, setAba] = useState<"lancamento" | "transferencia" | "buscar">("lancamento");
   const [termo, setTermo] = useState("");
@@ -176,6 +181,16 @@ export function PainelConciliacao({
             </select>
           </label>
           {sugestaoCat && <p className="text-[11px] text-primary-text">Categoria sugerida pelas suas regras.</p>}
+          {cartao && (
+            <label className="block text-xs font-medium text-muted-foreground">
+              Fatura
+              <FaturaSelect
+                dataCompra={dataLinha}
+                diaFechamento={cartao.diaFechamento}
+                diaVencimento={cartao.diaVencimento}
+              />
+            </label>
+          )}
           <button type="submit" className={buttonClasses("primary", "sm")}>
             <Check className="size-3.5" />
             Criar e conciliar

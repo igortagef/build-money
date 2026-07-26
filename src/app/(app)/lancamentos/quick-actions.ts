@@ -25,6 +25,9 @@ export type ContaCriada = {
   id: string;
   name: string;
   currency: CurrencyCode;
+  type: string;
+  statementClosingDay: number | null;
+  paymentDueDay: number | null;
 };
 
 const contaSchema = z.object({
@@ -58,6 +61,9 @@ export async function criarContaRapida(
       id: accounts.id,
       name: accounts.name,
       currency: accounts.currency,
+      type: accounts.type,
+      statementClosingDay: accounts.statementClosingDay,
+      paymentDueDay: accounts.paymentDueDay,
     });
 
   await semQuebrar(() => aoCadastrarConta(userId, ledgerId));
