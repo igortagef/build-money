@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import {
   accounts,
+  bankStatementLines,
   categories,
   reimbursables,
   reimbursableParticipants,
@@ -325,6 +326,108 @@ export async function togglePaid(formData: FormData) {
       .where(eq(reimbursables.id, p.rachaId));
   });
 
+  revalidatePath("/rachas");
+  revalidatePath("/");
+}
+
+/**
+ * Concilia uma ENTRADA do extrato como o reembolso de um participante: marca a
+ * pessoa como paga (dinheiro volta da piscina para a conta), já deixa a perna da
+ * conta conferida e vinculada à linha do banco, e recalcula o racha. É o mesmo
+ * efeito de "marcar pago" na tela de Rachas, mas feito de dentro da conciliação
+ * e escolhendo QUEM pagou.
+ */
+export async function conciliarReembolso(formData: FormData) {
+  const { ledgerId, userId } = await requireWriteAccess();
+  const linhaId = String(formData.get("linhaId") ?? "");
+  const accountId = String(formData.get("accountId") ?? "");
+  const participantId = String(formData.get("participantId") ?? "");
+  if (!linhaId || !accountId || !participantId) return;
+
+  const [linha] = await db
+    .select({
+      amount: bankStatementLines.amount,
+      status: bankStatementLines.status,
+      accountId: bankStatementLines.accountId,
+      date: bankStatementLines.date,
+    })
+    .from(bankStatementLines)
+    .where(and(eq(bankStatementLines.id, linhaId), eq(bankStatementLines.ledgerId, ledgerId)))
+    .limit(1);
+  // Reembolso é ENTRADA, na conta da linha e ainda pendente.
+  if (!linha || linha.status !== "pendente" || linha.accountId !== accountId || linha.amount <= 0) return;
+
+  const [p] = await db
+    .select({
+      id: reimbursableParticipants.id,
+      amount: reimbursableParticipants.amount,
+      paidAt: reimbursableParticipants.paidAt,
+      rachaId: reimbursableParticipants.reimbursableId,
+    })
+    .from(reimbursableParticipants)
+    .where(eq(reimbursableParticipants.id, participantId))
+    .limit(1);
+  if (!p || p.paidAt) return;
+
+  const [racha] = await db
+    .select()
+    .from(reimbursables)
+    .where(and(eq(reimbursables.id, p.rachaId), eq(reimbursables.ledgerId, ledgerId)))
+    .limit(1);
+  if (!racha || racha.accountId !== accountId) return;
+  // O valor da cota precisa bater exato com a entrada do banco.
+  if (p.amount !== linha.amount) return;
+
+  await db.transaction(async (trx) => {
+    const poolId = await garantirPiscina(trx, ledgerId, racha.currency);
+    const par = crypto.randomUUID();
+    const descricao = `Reembolso: ${racha.description}`;
+
+    const pernas = await trx
+      .insert(transactions)
+      .values([
+        {
+          ledgerId, accountId: poolId, createdByUserId: userId, type: "transfer",
+          status: "cleared", amount: -p.amount, currency: racha.currency, amountBase: -p.amount,
+          description: descricao, date: linha.date, settlementDate: linha.date, transferPairId: par,
+        },
+        {
+          ledgerId, accountId: racha.accountId, createdByUserId: userId, type: "transfer",
+          status: "reconciled", reconciledAt: new Date(), amount: p.amount, currency: racha.currency,
+          amountBase: p.amount, description: descricao, date: linha.date, settlementDate: linha.date,
+          transferPairId: par,
+        },
+      ])
+      .returning({ id: transactions.id, accountId: transactions.accountId });
+
+    const pernaConta = pernas.find((r) => r.accountId === racha.accountId)!;
+
+    await trx
+      .update(reimbursableParticipants)
+      .set({ paidAt: new Date() })
+      .where(eq(reimbursableParticipants.id, participantId));
+
+    // Recalcula recebido/status a partir dos participantes.
+    const parts = await trx
+      .select({ amount: reimbursableParticipants.amount, paidAt: reimbursableParticipants.paidAt })
+      .from(reimbursableParticipants)
+      .where(eq(reimbursableParticipants.reimbursableId, p.rachaId));
+    const recebido = parts.filter((x) => x.paidAt).reduce((s, x) => s + x.amount, 0);
+    const todosPagos = parts.every((x) => x.paidAt);
+    await trx
+      .update(reimbursables)
+      .set({ settledAmount: recebido, status: todosPagos ? "settled" : "open" })
+      .where(eq(reimbursables.id, p.rachaId));
+
+    // Vincula a linha do banco à perna da conta e a marca conciliada.
+    await trx
+      .update(bankStatementLines)
+      .set({ status: "conciliada", transactionId: pernaConta.id })
+      .where(eq(bankStatementLines.id, linhaId));
+  });
+
+  revalidatePath(`/conciliacao/${accountId}`);
+  revalidatePath("/conciliacao");
   revalidatePath("/rachas");
   revalidatePath("/");
 }

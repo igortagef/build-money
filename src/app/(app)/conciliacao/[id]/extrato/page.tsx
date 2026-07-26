@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Archive } from "lucide-react";
 import { and, asc, eq, isNull, ne } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts } from "@/db/schema";
+import { accounts, reimbursables, reimbursableParticipants } from "@/db/schema";
 import { requireAccess } from "@/lib/auth";
 import { getLinhasPendentes, getCandidatosParaBusca, getContagemLinhas } from "@/lib/conciliacao-ofx";
 import { getCategoriasParaRegra, getRegrasParaCasar, casarPorRegras } from "@/lib/category-rules";
@@ -33,7 +33,7 @@ export default async function ConciliarExtratoPage(props: {
     .limit(1);
   if (!conta) notFound();
 
-  const [linhas, categorias, regras, candidatos, contagem, contasDestino] = await Promise.all([
+  const [linhas, categorias, regras, candidatos, contagem, contasDestino, reembolsos] = await Promise.all([
     getLinhasPendentes(ledgerId, id),
     getCategoriasParaRegra(ledgerId),
     getRegrasParaCasar(ledgerId),
@@ -54,6 +54,24 @@ export default async function ConciliarExtratoPage(props: {
         ),
       )
       .orderBy(asc(accounts.name)),
+    // Participantes de racha ainda não reembolsados, para conciliar uma ENTRADA
+    // como o pagamento de uma pessoa (marca pago + concilia numa tacada).
+    db
+      .select({
+        participantId: reimbursableParticipants.id,
+        nome: reimbursableParticipants.name,
+        amount: reimbursableParticipants.amount,
+        racha: reimbursables.description,
+      })
+      .from(reimbursableParticipants)
+      .innerJoin(reimbursables, eq(reimbursables.id, reimbursableParticipants.reimbursableId))
+      .where(
+        and(
+          eq(reimbursables.ledgerId, ledgerId),
+          eq(reimbursables.accountId, id),
+          isNull(reimbursableParticipants.paidAt),
+        ),
+      ),
   ]);
 
   return (
@@ -161,6 +179,7 @@ export default async function ConciliarExtratoPage(props: {
                       contas={contasDestino}
                       candidatos={candidatos}
                       dataLinha={l.date}
+                      reembolsos={reembolsos}
                       cartao={
                         conta.type === "credit_card" &&
                         conta.statementClosingDay &&

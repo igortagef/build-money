@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { accounts, bankStatementLines, transactions, transactionSplits } from "@/db/schema";
@@ -48,6 +48,35 @@ export async function conciliarLinha(formData: FormData): Promise<void> {
     .map((s) => s.trim())
     .filter(Boolean);
   if (!linhaId || ids.length === 0) return;
+
+  // A linha precisa existir e ainda estar pendente.
+  const [linha] = await db
+    .select({ amount: bankStatementLines.amount, status: bankStatementLines.status })
+    .from(bankStatementLines)
+    .where(and(eq(bankStatementLines.id, linhaId), eq(bankStatementLines.ledgerId, ledgerId)))
+    .limit(1);
+  if (!linha || linha.status !== "pendente") return;
+
+  // Só concilia se a SOMA (com sinal) dos lançamentos escolhidos bater EXATO
+  // com a linha do banco. Sem isto, dava para conferir a linha cheia contra só
+  // uma perna do racha (minha parte), deixando a outra órfã e o saldo torto.
+  const escolhidos = await db
+    .select({ amount: transactions.amount, type: transactions.type })
+    .from(transactions)
+    .where(
+      and(
+        inArray(transactions.id, ids),
+        eq(transactions.ledgerId, ledgerId),
+        eq(transactions.accountId, accountId),
+        ne(transactions.status, "reconciled"),
+      ),
+    );
+  if (escolhidos.length !== ids.length) return;
+  const soma = escolhidos.reduce(
+    (s, t) => s + (t.type === "expense" ? -Math.abs(t.amount) : t.amount),
+    0,
+  );
+  if (soma !== linha.amount) return;
 
   await db.transaction(async (trx) => {
     await trx
@@ -130,6 +159,11 @@ export async function criarEConciliar(formData: FormData): Promise<void> {
   const valor = Math.abs(linha.amount);
   const tipo = linha.amount < 0 ? "expense" : "income";
 
+  // Competência informada no painel (a compra pode ter ocorrido noutro dia que
+  // não o do débito no extrato). Sem data válida, cai na data da linha.
+  const dataCompRaw = String(formData.get("date") ?? "").trim();
+  const competencia = /^\d{4}-\d{2}-\d{2}$/.test(dataCompRaw) ? dataCompRaw : linha.date;
+
   await db.transaction(async (trx) => {
     const [tx] = await trx
       .insert(transactions)
@@ -145,8 +179,8 @@ export async function criarEConciliar(formData: FormData): Promise<void> {
         currency: "BRL",
         amountBase: valor,
         description: descricao,
-        date: linha.date,
-        settlementDate: conta ? resolverDataDeCaixa(linha.date, conta, faturaEscolhida) : linha.date,
+        date: competencia,
+        settlementDate: conta ? resolverDataDeCaixa(competencia, conta, faturaEscolhida) : competencia,
       })
       .returning({ id: transactions.id });
 

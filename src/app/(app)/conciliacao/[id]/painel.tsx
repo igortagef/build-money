@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Check, Sparkles, Receipt, ArrowLeftRight, Search } from "lucide-react";
 import { conciliarLinha, criarEConciliar, criarTransferenciaEConciliar } from "../ofx-actions";
+import { conciliarReembolso } from "../../rachas/actions";
 import type { CandidatoBusca } from "@/lib/conciliacao-ofx";
 import { formatMoney } from "@/lib/money";
 import { buttonClasses, cn } from "@/components/ui";
@@ -41,6 +42,7 @@ export function PainelConciliacao({
   contas,
   candidatos,
   dataLinha,
+  reembolsos,
   cartao,
 }: {
   linhaId: string;
@@ -54,11 +56,15 @@ export function PainelConciliacao({
   contas: Conta[];
   candidatos: CandidatoBusca[];
   dataLinha: string;
+  reembolsos: { participantId: string; nome: string | null; amount: number; racha: string }[];
   cartao: { diaFechamento: number; diaVencimento: number } | null;
 }) {
   const [aba, setAba] = useState<"lancamento" | "transferencia" | "buscar">("lancamento");
   const [termo, setTermo] = useState("");
   const [sel, setSel] = useState<ReadonlySet<string>>(new Set());
+  // Competência do lançamento criado pela conciliação: começa na data da linha,
+  // mas o usuário pode ajustar (a compra pode ter ocorrido noutro dia).
+  const [dataComp, setDataComp] = useState(dataLinha);
 
   const alternar = (id: string) => {
     const proximo = new Set(sel);
@@ -66,27 +72,68 @@ export function PainelConciliacao({
     else proximo.add(id);
     setSel(proximo);
   };
-  const somaSel = candidatos.filter((c) => sel.has(c.id)).reduce((s, c) => s + Math.abs(c.amount), 0);
-  const somaBate = sel.size > 0 && somaSel === Math.abs(valorLinha);
+  // Soma COM SINAL: precisa bater exato com a linha do banco (que também tem
+  // sinal). Assim, conferir a linha cheia contra só uma perna do racha não bate.
+  const somaSel = candidatos.filter((c) => sel.has(c.id)).reduce((s, c) => s + c.amount, 0);
+  const somaBate = sel.size > 0 && somaSel === valorLinha;
+  // Reembolsos possíveis desta ENTRADA: participantes cuja cota bate com o valor.
+  const reembolsosMatch = valorLinha > 0 ? reembolsos.filter((r) => r.amount === valorLinha) : [];
 
   // Resultados da busca: filtra por texto; sem texto, mostra os de MESMO valor
   // primeiro (o casamento mais provável). Limita para não poluir.
   const resultados = useMemo(() => {
-    const t = termo.trim().toLowerCase();
+    const norm = (s: string) =>
+      s.toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
+    const t = norm(termo.trim());
     const alvo = Math.abs(valorLinha);
+    const dist = (iso: string) =>
+      Math.abs(
+        new Date(`${iso}T12:00:00`).getTime() - new Date(`${dataLinha}T12:00:00`).getTime(),
+      );
     return candidatos
-      .filter((c) => (t ? c.description.toLowerCase().includes(t) : true))
+      .filter((c) => (t ? norm(c.description).includes(t) : true))
       .sort((a, b) => {
+        // Mesmo valor da linha primeiro; depois o mais próximo da data da linha
+        // — é onde caem as duas pernas de um racha (a de saída pode ser antiga).
         const am = Math.abs(a.amount) === alvo ? 0 : 1;
         const bm = Math.abs(b.amount) === alvo ? 0 : 1;
         if (am !== bm) return am - bm;
-        return a.date < b.date ? 1 : -1;
+        return dist(a.date) - dist(b.date);
       })
-      .slice(0, 20);
-  }, [candidatos, termo, valorLinha]);
+      .slice(0, 40);
+  }, [candidatos, termo, valorLinha, dataLinha]);
 
   return (
     <div className="space-y-3">
+      {/* Entrada que casa com a cota de um participante de racha: um clique marca
+          a pessoa como paga e concilia. */}
+      {reembolsosMatch.length > 0 && (
+        <div className="space-y-2 rounded-lg border border-income/25 bg-income-subtle/40 p-3">
+          <span className="inline-flex items-center gap-1 rounded-full bg-income-subtle px-2 py-0.5 text-[10px] font-semibold text-income">
+            <Check className="size-3" />
+            Reembolso de racha
+          </span>
+          <p className="text-[11px] text-muted-foreground">
+            Quem te pagou este valor? Marca a pessoa como paga e concilia de uma vez.
+          </p>
+          {reembolsosMatch.map((r) => (
+            <form key={r.participantId} action={conciliarReembolso} className="flex items-center gap-2">
+              <input type="hidden" name="linhaId" value={linhaId} />
+              <input type="hidden" name="accountId" value={accountId} />
+              <input type="hidden" name="participantId" value={r.participantId} />
+              <span className="min-w-0 flex-1 truncate text-sm">
+                <span className="font-medium">{r.nome ?? "Participante"}</span>{" "}
+                <span className="text-xs text-muted-foreground">· {r.racha}</span>
+              </span>
+              <button type="submit" className={buttonClasses("primary", "sm")}>
+                <Check className="size-3.5" />
+                {formatMoney(r.amount, currency)}
+              </button>
+            </form>
+          ))}
+        </div>
+      )}
+
       {/* Par sugerido pelo casamento automático */}
       {sugestao && (
         <form action={conciliarLinha} className="space-y-2 rounded-lg border border-income/25 bg-income-subtle/40 p-3">
@@ -166,6 +213,17 @@ export function PainelConciliacao({
             />
           </label>
           <label className="block text-xs font-medium text-muted-foreground">
+            Data (competência)
+            <input
+              type="date"
+              name="date"
+              value={dataComp}
+              onChange={(e) => setDataComp(e.target.value)}
+              required
+              className="mt-1 block w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-sm text-foreground"
+            />
+          </label>
+          <label className="block text-xs font-medium text-muted-foreground">
             Categoria
             <select
               name="categoryId"
@@ -185,7 +243,7 @@ export function PainelConciliacao({
             <label className="block text-xs font-medium text-muted-foreground">
               Fatura
               <FaturaSelect
-                dataCompra={dataLinha}
+                dataCompra={dataComp}
                 diaFechamento={cartao.diaFechamento}
                 diaVencimento={cartao.diaVencimento}
               />
@@ -203,7 +261,9 @@ export function PainelConciliacao({
           <input type="hidden" name="linhaId" value={linhaId} />
           <input type="hidden" name="accountId" value={accountId} />
           <p className="text-[11px] text-muted-foreground">
-            O dinheiro deste movimento foi/para outra conta sua (aplicação, saque, pagamento de fatura).
+            {valorLinha > 0
+              ? "Entrou dinheiro nesta conta vindo de outra conta sua — escolha de onde veio."
+              : "Saiu dinheiro desta conta para outra conta sua (aplicação, pagamento de fatura) — escolha para onde foi."}
           </p>
           <label className="block text-xs font-medium text-muted-foreground">
             Descrição
@@ -214,7 +274,7 @@ export function PainelConciliacao({
             />
           </label>
           <label className="block text-xs font-medium text-muted-foreground">
-            Conta de destino
+            {valorLinha > 0 ? "Conta de origem (de onde veio)" : "Conta de destino (para onde foi)"}
             <select
               name="contaDestinoId"
               required
@@ -297,12 +357,17 @@ export function PainelConciliacao({
                   <input type="hidden" name="accountId" value={accountId} />
                   <span className="text-xs text-muted-foreground">
                     {sel.size} selecionado{sel.size > 1 ? "s" : ""} · soma{" "}
-                    <strong className={cn("tabular", somaBate ? "text-income" : "text-foreground")}>
-                      {formatMoney(somaSel, currency)}
+                    <strong className={cn("tabular", somaBate ? "text-income" : "text-warning")}>
+                      {formatMoney(Math.abs(somaSel), currency)}
                     </strong>
                     {somaBate ? " · bate" : ` de ${formatMoney(Math.abs(valorLinha), currency)}`}
                   </span>
-                  <button type="submit" className={buttonClasses("primary", "sm") + " ml-auto"}>
+                  <button
+                    type="submit"
+                    disabled={!somaBate}
+                    title={somaBate ? undefined : "A soma dos selecionados precisa bater com a linha do banco"}
+                    className={buttonClasses("primary", "sm") + " ml-auto disabled:opacity-50"}
+                  >
                     <Check className="size-3.5" />
                     Conciliar {sel.size > 1 ? "selecionados" : ""}
                   </button>
