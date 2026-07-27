@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Filter, X, Check, ChevronDown, Search } from "lucide-react";
 import { cn, Button } from "@/components/ui";
@@ -48,7 +48,22 @@ export function Filtros({ contas, categorias, centros }: Props) {
   const params = useSearchParams();
   const [aberto, setAberto] = useState<Chave | null>(null);
   const [busca, setBusca] = useState("");
+  // Busca livre da lista (descrição/categoria/valor). Vive na URL como ?q=,
+  // com um respiro (debounce) para não navegar a cada tecla.
+  const [q, setQ] = useState(params.get("q") ?? "");
   const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const atual = params.get("q") ?? "";
+    if (q.trim() === atual) return;
+    const t = setTimeout(() => {
+      const novos = new URLSearchParams(params.toString());
+      if (q.trim()) novos.set("q", q.trim());
+      else novos.delete("q");
+      router.push(`${pathname}?${novos.toString()}`);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [q, params, pathname, router]);
 
   const opcoes: Record<Chave, Opcao[]> = {
     conta: contas,
@@ -100,6 +115,37 @@ export function Filtros({ contas, categorias, centros }: Props) {
 
   return (
     <div ref={ref} className="flex flex-wrap items-center gap-2">
+      {/* Busca livre: descrição, categoria ou valor (ex.: "mercado", "150"). */}
+      <div className="relative w-full sm:w-72">
+        <Search
+          className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+          aria-hidden
+        />
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape" && q) {
+              e.stopPropagation();
+              setQ("");
+            }
+          }}
+          placeholder="Buscar por descrição, categoria ou valor…"
+          aria-label="Buscar lançamentos"
+          className="h-9 w-full rounded-lg border border-border bg-surface pl-8 pr-8 text-sm text-foreground placeholder:text-muted-foreground/60"
+        />
+        {q && (
+          <button
+            type="button"
+            onClick={() => setQ("")}
+            aria-label="Limpar busca"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          >
+            <X className="size-3.5" />
+          </button>
+        )}
+      </div>
+
       <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <Filter className="size-3.5" aria-hidden />
         Filtrar

@@ -10,7 +10,7 @@ import {
   transactionSplits,
 } from "@/db/schema";
 import { requireAccess } from "@/lib/auth";
-import { formatMoney } from "@/lib/money";
+import { formatMoney, parseMoney } from "@/lib/money";
 import { monthRange } from "@/lib/queries";
 import { formatarDataBR } from "@/lib/periodo";
 import { buttonClasses, Card, cn } from "@/components/ui";
@@ -43,6 +43,7 @@ export default async function LancamentosPage(props: {
     ate?: string;
     regime?: string;
     status?: string;
+    q?: string;
   }>;
 }) {
   // No Next 16 searchParams é uma Promise.
@@ -51,6 +52,7 @@ export default async function LancamentosPage(props: {
   const contasFiltro = comoLista(sp.conta);
   const categoriasFiltro = comoLista(sp.categoria);
   const centrosFiltro = comoLista(sp.centro);
+  const busca = (sp.q ?? "").trim();
 
   // Modo intervalo: quando vem `de`/`ate` (rastreio a partir dos relatórios),
   // a lista cobre o período exato, no regime informado, em vez do mês.
@@ -154,6 +156,26 @@ export default async function LancamentosPage(props: {
           and coalesce(ts.cost_center_id, c.cost_center_id) in ${centrosFiltro}
       )`,
     );
+  }
+
+  // Busca livre: casa por descrição, por categoria do rateio ou pelo valor
+  // (quando o termo é um número, ex.: "150" -> R$ 150,00). É um OU entre elas.
+  if (busca) {
+    const like = `%${busca}%`;
+    const valorCent = parseMoney(busca);
+    const ors = [
+      sql`${transactions.description} ilike ${like}`,
+      sql`exists (
+        select 1 from ${transactionSplits} ts
+        join ${categories} c on c.id = ts.category_id
+        where ts.transaction_id = ${transactions.id}
+          and c.name ilike ${like}
+      )`,
+    ];
+    if (valorCent !== null && valorCent > 0) {
+      ors.push(sql`${transactions.amount} = ${valorCent}`);
+    }
+    filtros.push(sql`(${sql.join(ors, sql` or `)})`);
   }
 
   // Opções dos filtros: só o que existe neste espaço.
