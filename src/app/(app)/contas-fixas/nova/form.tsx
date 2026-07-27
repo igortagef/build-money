@@ -42,7 +42,8 @@ export function NewRecurringForm({
   );
 
   const [tipo, setTipo] = useState<"expense" | "income">("expense");
-  const [contaId, setContaId] = useState(contas[0]?.id ?? "");
+  // Vazio = usa a conta padrão do espaço (a conta é opcional na conta fixa).
+  const [contaId, setContaId] = useState("");
   const [frequencia, setFrequencia] = useState<RecurrenceFrequency>("monthly");
   const [valor, setValor] = useState("");
   const [descricao, setDescricao] = useState("");
@@ -154,7 +155,12 @@ export function NewRecurringForm({
         </Field>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Conta" htmlFor="accountId" error={state.fieldErrors?.accountId}>
+          <Field
+            label="Conta"
+            htmlFor="accountId"
+            hint="Opcional. Sem escolher, usa a conta padrão do espaço."
+            error={state.fieldErrors?.accountId}
+          >
             <Select
               id="accountId"
               name="accountId"
@@ -162,6 +168,7 @@ export function NewRecurringForm({
               onChange={(e) => setContaId(e.target.value)}
               invalid={!!state.fieldErrors?.accountId}
             >
+              <option value="">Conta padrão do espaço</option>
               {contas.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}

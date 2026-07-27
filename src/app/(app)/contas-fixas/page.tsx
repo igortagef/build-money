@@ -1,11 +1,15 @@
 import Link from "next/link";
 import { CalendarClock, Plus, Repeat, Zap } from "lucide-react";
+import { and, asc, eq, isNull } from "drizzle-orm";
+import { db } from "@/db";
+import { accounts, ledgers } from "@/db/schema";
 import { requireAccess } from "@/lib/auth";
 import { getContasFixas } from "@/lib/provisioning";
 import { formatMoney } from "@/lib/money";
 import { FREQUENCIA_LABEL } from "@/lib/recurrence";
 import { buttonClasses, Card, cn } from "@/components/ui";
 import { AcoesFixa } from "./acoes";
+import { setContaPadrao } from "./actions";
 
 export const metadata = { title: "Contas fixas · Build Money" };
 
@@ -16,7 +20,29 @@ const DATA = new Intl.DateTimeFormat("pt-BR", {
 
 export default async function ContasFixasPage() {
   const { ledgerId, baseCurrency } = await requireAccess();
-  const fixas = await getContasFixas(ledgerId);
+  const [fixas, contasDisponiveis, [espaco]] = await Promise.all([
+    getContasFixas(ledgerId),
+    db
+      .select({ id: accounts.id, name: accounts.name })
+      .from(accounts)
+      .where(
+        and(
+          eq(accounts.ledgerId, ledgerId),
+          isNull(accounts.archivedAt),
+          eq(accounts.isReimbursementPool, false),
+          eq(accounts.isInvestmentPool, false),
+        ),
+      )
+      .orderBy(asc(accounts.name)),
+    db
+      .select({ contaPadrao: ledgers.defaultPaymentAccountId })
+      .from(ledgers)
+      .where(eq(ledgers.id, ledgerId))
+      .limit(1),
+  ]);
+  const contaPadraoId = espaco?.contaPadrao ?? "";
+  // Alguma regra usa a conta padrão (conta própria não definida)?
+  const usamPadrao = fixas.some((f) => !f.accountName);
 
   const ativas = fixas.filter((f) => f.active);
   const pausadas = fixas.filter((f) => !f.active);
@@ -42,6 +68,38 @@ export default async function ContasFixasPage() {
           Nova conta fixa
         </Link>
       </div>
+
+      {contasDisponiveis.length > 0 && (usamPadrao || contaPadraoId) && (
+        <Card className="flex flex-wrap items-center gap-3 p-4">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">Conta padrão</p>
+            <p className="text-xs text-muted-foreground">
+              Usada pelas contas fixas que não escolhem uma conta própria.
+              {usamPadrao && !contaPadraoId && (
+                <span className="text-warning"> Defina uma para elas entrarem no fluxo.</span>
+              )}
+            </p>
+          </div>
+          <form action={setContaPadrao} className="flex items-center gap-2">
+            <select
+              name="accountId"
+              defaultValue={contaPadraoId}
+              aria-label="Conta padrão do espaço"
+              className="rounded-lg border border-border bg-surface px-2 py-1.5 text-sm text-foreground"
+            >
+              <option value="">Nenhuma</option>
+              {contasDisponiveis.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <button type="submit" className={buttonClasses("secondary", "sm")}>
+              Salvar
+            </button>
+          </form>
+        </Card>
+      )}
 
       {fixas.length === 0 ? (
         <Card className="flex flex-col items-center gap-4 p-10 text-center">
@@ -141,7 +199,7 @@ function FixaCard({
             {FREQUENCIA_LABEL[fixa.frequency]}
             {fixa.dayOfMonth && `, dia ${fixa.dayOfMonth}`}
             {" · "}
-            {fixa.accountName}
+            {fixa.accountName ?? "Conta padrão"}
             {fixa.autoConfirm && " · confirma sozinha"}
           </p>
         </div>

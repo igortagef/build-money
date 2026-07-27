@@ -1,7 +1,7 @@
 import "server-only";
 import { and, asc, eq, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts, recurringRules, transactions, transactionSplits } from "@/db/schema";
+import { accounts, ledgers, recurringRules, transactions, transactionSplits } from "@/db/schema";
 import { ocorrencias, horizonte, type Regra } from "./recurrence";
 import { calcularDataDeCaixa } from "./statement";
 
@@ -38,12 +38,26 @@ export async function provisionarLedger(ledgerId: string): Promise<number> {
       vencimento: accounts.paymentDueDay,
     })
     .from(recurringRules)
-    .innerJoin(accounts, eq(recurringRules.accountId, accounts.id))
+    // leftJoin: regras SEM conta também entram (usam a conta padrão do espaço).
+    .leftJoin(accounts, eq(recurringRules.accountId, accounts.id))
     .where(
       and(eq(recurringRules.ledgerId, ledgerId), eq(recurringRules.active, true)),
     );
 
   if (regras.length === 0) return 0;
+
+  // Conta padrão do espaço + sua configuração (para o caixa no cartão).
+  const [espaco] = await db
+    .select({
+      contaPadraoId: ledgers.defaultPaymentAccountId,
+      padraoTipo: accounts.type,
+      padraoFechamento: accounts.statementClosingDay,
+      padraoVencimento: accounts.paymentDueDay,
+    })
+    .from(ledgers)
+    .leftJoin(accounts, eq(accounts.id, ledgers.defaultPaymentAccountId))
+    .where(eq(ledgers.id, ledgerId))
+    .limit(1);
 
   const ate = horizonte();
   let criados = 0;
@@ -56,6 +70,16 @@ export async function provisionarLedger(ledgerId: string): Promise<number> {
       endDate: r.endDate,
     };
 
+    // Conta efetiva: a da regra ou, sem ela, a conta padrão do espaço. Sem
+    // nenhuma das duas, não dá para prever (o previsto precisa de conta) —
+    // a regra fica como lembrete até definir a conta padrão.
+    const contaId = r.accountId ?? espaco?.contaPadraoId ?? null;
+    if (!contaId) continue;
+    const usaPadrao = !r.accountId;
+    const contaTipo = usaPadrao ? espaco?.padraoTipo : r.contaTipo;
+    const fechamento = usaPadrao ? espaco?.padraoFechamento : r.fechamento;
+    const vencimento = usaPadrao ? espaco?.padraoVencimento : r.vencimento;
+
     const datas = ocorrencias(regra, r.generatedThrough, ate);
     if (datas.length === 0) continue;
 
@@ -64,7 +88,7 @@ export async function provisionarLedger(ledgerId: string): Promise<number> {
         .insert(transactions)
         .values({
           ledgerId,
-          accountId: r.accountId,
+          accountId: contaId,
           recurringRuleId: r.id,
           type: r.type,
           // Previsto: ainda não aconteceu. Vira "cleared" quando o usuário
@@ -76,9 +100,9 @@ export async function provisionarLedger(ledgerId: string): Promise<number> {
           description: r.description,
           date: data,
           settlementDate: calcularDataDeCaixa(data, {
-            type: r.contaTipo,
-            statementClosingDay: r.fechamento,
-            paymentDueDay: r.vencimento,
+            type: contaTipo ?? "checking",
+            statementClosingDay: fechamento ?? null,
+            paymentDueDay: vencimento ?? null,
           }),
         })
         // A trava do banco: se já existe para esta regra e data, ignora.
@@ -168,7 +192,8 @@ export async function getContasFixas(ledgerId: string) {
       )`,
     })
     .from(recurringRules)
-    .innerJoin(accounts, eq(recurringRules.accountId, accounts.id))
+    // leftJoin: a conta é opcional; regras sem conta usam a padrão do espaço.
+    .leftJoin(accounts, eq(recurringRules.accountId, accounts.id))
     .where(eq(recurringRules.ledgerId, ledgerId))
     .orderBy(asc(recurringRules.active), asc(recurringRules.description));
 }

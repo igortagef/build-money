@@ -300,6 +300,11 @@ export const ledgers = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "restrict" }),
     isPersonal: boolean("is_personal").notNull().default(true),
+    // Conta padrão para contas fixas que não definem uma conta própria.
+    defaultPaymentAccountId: uuid("default_payment_account_id").references(
+      (): AnyPgColumn => accounts.id,
+      { onDelete: "set null" },
+    ),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -674,9 +679,11 @@ export const recurringRules = pgTable(
     ledgerId: uuid("ledger_id")
       .notNull()
       .references(() => ledgers.id, { onDelete: "cascade" }),
-    accountId: uuid("account_id")
-      .notNull()
-      .references(() => accounts.id, { onDelete: "cascade" }),
+    // Conta de pagamento. Opcional: sem ela, o provisionamento usa a conta
+    // padrão do espaço (ledgers.default_payment_account_id).
+    accountId: uuid("account_id").references(() => accounts.id, {
+      onDelete: "cascade",
+    }),
     categoryId: uuid("category_id").references(() => categories.id, {
       onDelete: "set null",
     }),

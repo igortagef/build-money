@@ -1,11 +1,11 @@
 "use server";
 
 import { z } from "zod";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
-import { accounts, categories, recurringRules, transactions } from "@/db/schema";
+import { accounts, categories, ledgers, recurringRules, transactions } from "@/db/schema";
 import { requireWriteAccess } from "@/lib/auth";
 import { parseMoney } from "@/lib/money";
 import { provisionarLedger } from "@/lib/provisioning";
@@ -19,7 +19,8 @@ const schema = z
   .object({
     description: z.string().trim().min(1, "Descreva a conta").max(120),
     type: z.enum(["income", "expense"]),
-    accountId: z.string().uuid("Selecione uma conta"),
+    // Opcional: sem conta, o previsto sai na conta padrão do espaço.
+    accountId: z.string().uuid().nullable(),
     categoryId: z.string().uuid("Selecione uma categoria"),
     amount: z.number().int().positive("O valor precisa ser maior que zero"),
     frequency: z.enum([
@@ -64,7 +65,7 @@ export async function createRecurring(
   _prev: FixaFormState,
   formData: FormData,
 ): Promise<FixaFormState> {
-  const { ledgerId } = await requireWriteAccess();
+  const { ledgerId, baseCurrency } = await requireWriteAccess();
 
   const dia = String(formData.get("dayOfMonth") ?? "").trim();
   const fim = String(formData.get("endDate") ?? "").trim();
@@ -72,7 +73,7 @@ export async function createRecurring(
   const parsed = schema.safeParse({
     description: formData.get("description"),
     type: formData.get("type"),
-    accountId: formData.get("accountId"),
+    accountId: String(formData.get("accountId") ?? "").trim() || null,
     categoryId: formData.get("categoryId"),
     amount: parseMoney(String(formData.get("amount") ?? "")) ?? 0,
     frequency: formData.get("frequency"),
@@ -85,14 +86,18 @@ export async function createRecurring(
   if (!parsed.success) return { fieldErrors: erros(parsed.error) };
   const d = parsed.data;
 
-  // Conta e categoria precisam ser deste espaço, e a categoria do mesmo tipo
-  // da regra — senão daria para provisionar despesa em categoria de receita.
-  const [conta] = await db
-    .select({ id: accounts.id, currency: accounts.currency })
-    .from(accounts)
-    .where(and(eq(accounts.id, d.accountId), eq(accounts.ledgerId, ledgerId)))
-    .limit(1);
-  if (!conta) return { fieldErrors: { accountId: "Conta inválida" } };
+  // Se veio uma conta, precisa ser deste espaço. Sem conta, a regra usa a conta
+  // padrão do espaço na hora de prever, e a moeda cai na moeda base.
+  let conta: { id: string; currency: "BRL" | "USD" | "EUR" } | null = null;
+  if (d.accountId) {
+    const [c] = await db
+      .select({ id: accounts.id, currency: accounts.currency })
+      .from(accounts)
+      .where(and(eq(accounts.id, d.accountId), eq(accounts.ledgerId, ledgerId)))
+      .limit(1);
+    if (!c) return { fieldErrors: { accountId: "Conta inválida" } };
+    conta = c;
+  }
 
   const [cat] = await db
     .select({ id: categories.id })
@@ -114,7 +119,7 @@ export async function createRecurring(
     type: d.type,
     description: d.description,
     amount: d.amount,
-    currency: conta.currency,
+    currency: conta?.currency ?? baseCurrency,
     frequency: d.frequency,
     dayOfMonth: d.dayOfMonth,
     startDate: d.startDate,
@@ -199,6 +204,44 @@ export async function deleteRecurring(formData: FormData) {
   await db
     .delete(recurringRules)
     .where(and(eq(recurringRules.id, id), eq(recurringRules.ledgerId, ledgerId)));
+
+  revalidatePath("/contas-fixas");
+  revalidatePath("/lancamentos");
+  revalidatePath("/");
+}
+
+/**
+ * Define (ou limpa) a conta padrão do espaço — usada pelas contas fixas que não
+ * escolhem uma conta própria. Reprovisiona para as regras sem conta passarem a
+ * prever (ou pararem, se a padrão for removida).
+ */
+export async function setContaPadrao(formData: FormData) {
+  const { ledgerId } = await requireWriteAccess();
+  const raw = String(formData.get("accountId") ?? "").trim();
+
+  let contaId: string | null = null;
+  if (raw) {
+    const [c] = await db
+      .select({ id: accounts.id })
+      .from(accounts)
+      .where(and(eq(accounts.id, raw), eq(accounts.ledgerId, ledgerId)))
+      .limit(1);
+    if (!c) return;
+    contaId = c.id;
+  }
+
+  await db
+    .update(ledgers)
+    .set({ defaultPaymentAccountId: contaId })
+    .where(eq(ledgers.id, ledgerId));
+
+  // Regras sem conta ainda não provisionadas passam a gerar do zero.
+  await db
+    .update(recurringRules)
+    .set({ generatedThrough: null })
+    .where(and(eq(recurringRules.ledgerId, ledgerId), sql`${recurringRules.accountId} is null`));
+
+  await provisionarLedger(ledgerId);
 
   revalidatePath("/contas-fixas");
   revalidatePath("/lancamentos");
