@@ -44,6 +44,8 @@ export default async function LancamentosPage(props: {
     regime?: string;
     status?: string;
     q?: string;
+    periodo?: string;
+    pagina?: string;
   }>;
 }) {
   // No Next 16 searchParams é uma Promise.
@@ -91,10 +93,34 @@ export default async function LancamentosPage(props: {
           .limit(20)
       : [];
 
+  // Período: mês (padrão, com navegação), últimos 7 dias, ou todo o histórico.
+  // No modo intervalo (rastreio de relatório) o período fica fixo em de/até.
+  const periodo: "mes" | "7dias" | "tudo" = rangeMode
+    ? "mes"
+    : sp.periodo === "7dias"
+      ? "7dias"
+      : sp.periodo === "tudo"
+        ? "tudo"
+        : "mes";
+
   const referencia = mes ? new Date(`${mes}-01T12:00:00`) : new Date();
-  const { start, end } = rangeMode
-    ? { start: sp.de!, end: sp.ate! }
-    : monthRange(referencia);
+  let start: string;
+  let end: string;
+  if (rangeMode) {
+    start = sp.de!;
+    end = sp.ate!;
+  } else if (periodo === "7dias") {
+    const d = new Date();
+    d.setDate(d.getDate() - 6);
+    start = d.toISOString().slice(0, 10);
+    end = hojeStr;
+  } else if (periodo === "tudo") {
+    // Limites largos = "sem recorte" sem precisar de SQL condicional.
+    start = "0001-01-01";
+    end = "9999-12-31";
+  } else {
+    ({ start, end } = monthRange(referencia));
+  }
 
   // No modo intervalo em regime de caixa, filtra pela data de caixa (a fatura do
   // cartão conta no vencimento) — batendo com o que o relatório somou.
@@ -218,6 +244,9 @@ export default async function LancamentosPage(props: {
     }))
     .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
 
+  const POR_PAGINA = 25;
+  const paginaAtual = Math.max(1, Math.floor(Number(sp.pagina)) || 1);
+
   const linhas = await db
     .select({
       id: transactions.id,
@@ -247,7 +276,24 @@ export default async function LancamentosPage(props: {
     .leftJoin(categories, eq(transactionSplits.categoryId, categories.id))
     .where(and(...filtros))
     .groupBy(transactions.id, accounts.name)
-    .orderBy(desc(transactions.date), desc(transactions.createdAt));
+    .orderBy(desc(transactions.date), desc(transactions.createdAt))
+    .limit(POR_PAGINA)
+    .offset((paginaAtual - 1) * POR_PAGINA);
+
+  // Contagem e somatórios sobre o conjunto INTEIRO do filtro (não só a página):
+  // a paginação não pode encolher os totais nem o "N de M".
+  const [{ total: totalLinhas }] = await db
+    .select({ total: sql<number>`count(*)`.mapWith(Number) })
+    .from(transactions)
+    .where(and(...filtros));
+
+  const [somas] = await db
+    .select({
+      receitas: sql<number>`coalesce(sum(case when ${transactions.type} = 'income' and ${transactions.status} <> 'pending' then ${transactions.amountBase} else 0 end), 0)`.mapWith(Number),
+      despesas: sql<number>`coalesce(sum(case when ${transactions.type} = 'expense' and ${transactions.status} <> 'pending' then ${transactions.amountBase} else 0 end), 0)`.mapWith(Number),
+    })
+    .from(transactions)
+    .where(and(...filtros));
 
   // Transferências cujas pernas tocam uma piscina (aporte/resgate, racha) não
   // podem ser apagadas soltas na lista — isso deixaria o ativo/racha inflado.
@@ -274,12 +320,9 @@ export default async function LancamentosPage(props: {
       )
     : new Set<string>();
 
-  const receitas = linhas
-    .filter((l) => l.type === "income" && l.status !== "pending")
-    .reduce((s, l) => s + l.amountBase, 0);
-  const despesas = linhas
-    .filter((l) => l.type === "expense" && l.status !== "pending")
-    .reduce((s, l) => s + l.amountBase, 0);
+  const receitas = somas?.receitas ?? 0;
+  const despesas = somas?.despesas ?? 0;
+  const totalPaginas = Math.max(1, Math.ceil(totalLinhas / POR_PAGINA));
 
   const mesAtual = start.slice(0, 7);
   const anterior = new Date(referencia.getFullYear(), referencia.getMonth() - 1, 1);
@@ -295,14 +338,22 @@ export default async function LancamentosPage(props: {
    * avançar um mês descartaria os filtros que o usuário acabou de escolher. No
    * modo intervalo (rastreio dos relatórios), preserva de/até/regime.
    */
-  function url(mudancas: { mes?: string; tipo?: string | null; status?: string | null }) {
+  function url(mudancas: {
+    mes?: string;
+    tipo?: string | null;
+    status?: string | null;
+    periodo?: "mes" | "7dias" | "tudo";
+    pagina?: number;
+  }) {
     const p = new URLSearchParams();
     if (rangeMode) {
       p.set("de", sp.de!);
       p.set("ate", sp.ate!);
       if (regime === "caixa") p.set("regime", "caixa");
     } else {
-      p.set("mes", mudancas.mes ?? mesAtual);
+      const per = "periodo" in mudancas ? mudancas.periodo! : periodo;
+      if (per === "mes") p.set("mes", mudancas.mes ?? mesAtual);
+      else p.set("periodo", per);
     }
 
     const novoTipo = "tipo" in mudancas ? mudancas.tipo : tipo;
@@ -313,6 +364,10 @@ export default async function LancamentosPage(props: {
     for (const c of contasFiltro) p.append("conta", c);
     for (const c of categoriasFiltro) p.append("categoria", c);
     for (const c of centrosFiltro) p.append("centro", c);
+    if (busca) p.set("q", busca);
+
+    // Paginação só quando pedida; qualquer outra mudança volta para a página 1.
+    if (mudancas.pagina && mudancas.pagina > 1) p.set("pagina", String(mudancas.pagina));
 
     return `/lancamentos?${p.toString()}`;
   }
@@ -374,6 +429,33 @@ export default async function LancamentosPage(props: {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
+        {/* Período: mês (com navegação), últimos 7 dias ou todo o histórico. */}
+        {!rangeMode && (
+          <div className="flex gap-0.5 rounded-lg bg-surface-muted p-0.5">
+            {(
+              [
+                { v: "mes", label: "Mês" },
+                { v: "7dias", label: "7 dias" },
+                { v: "tudo", label: "Tudo" },
+              ] as const
+            ).map(({ v, label }) => (
+              <Link
+                key={v}
+                href={url({ periodo: v })}
+                aria-current={periodo === v ? "true" : undefined}
+                className={cn(
+                  "rounded-md px-2.5 py-1 text-sm font-medium transition-colors",
+                  periodo === v
+                    ? "bg-surface text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {label}
+              </Link>
+            ))}
+          </div>
+        )}
+
         {rangeMode ? (
           // Rastreio a partir de um relatório: mostra o período e um botão para
           // sair dele (voltar à navegação por mês).
@@ -386,7 +468,7 @@ export default async function LancamentosPage(props: {
               Limpar período
             </Link>
           </>
-        ) : (
+        ) : periodo === "mes" ? (
           <>
             <Link href={url({ mes: iso(anterior) })} className={buttonClasses("secondary", "sm")}>
               ‹ Anterior
@@ -396,6 +478,10 @@ export default async function LancamentosPage(props: {
               Próximo ›
             </Link>
           </>
+        ) : (
+          <span className="text-sm font-medium text-muted-foreground">
+            {periodo === "7dias" ? "Últimos 7 dias" : "Todo o período"}
+          </span>
         )}
 
         <div className="ml-auto flex gap-1">
@@ -440,98 +526,154 @@ export default async function LancamentosPage(props: {
 
       <ReceitasPrevistas itens={receitasPrevistas} baseCurrency={baseCurrency} />
 
-      {linhas.length === 0 ? (
+      {totalLinhas === 0 ? (
         <Card className="p-10 text-center">
           <p className="text-sm text-muted-foreground">
-            {/*
-              Com filtro ativo, "nenhum lançamento" é ambíguo: pode ser que o
-              mês esteja vazio ou que o filtro tenha escondido tudo. Dizer qual
-              é o caso evita o susto de achar que os dados sumiram.
-            */}
-            {totalFiltros > 0
-              ? `Nenhum lançamento em ${titulo.toLowerCase()} com os filtros aplicados.`
-              : `Nenhum lançamento em ${titulo.toLowerCase()}.`}
+            {totalFiltros > 0 || busca
+              ? "Nenhum lançamento com os filtros aplicados."
+              : "Nenhum lançamento neste período."}
           </p>
         </Card>
       ) : (
-        <Card className="divide-y divide-border">
-          {linhas.map((l) => (
-            <div key={l.id} className="flex items-center gap-3 p-4">
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{l.description}</p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {new Date(`${l.date}T12:00:00`).toLocaleDateString("pt-BR", {
-                    day: "2-digit",
-                    month: "short",
-                  })}
-                  {" · "}
-                  {l.accountName}
-                  {l.categorias.length > 0 && ` · ${l.categorias.join(", ")}`}
-                  {l.status === "pending" && " · previsto"}
-                  {l.status === "reconciled" && " · conferido"}
-                </p>
-              </div>
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                  <th className="px-4 py-2.5 font-medium">Data</th>
+                  <th className="px-4 py-2.5 font-medium">Descrição</th>
+                  <th className="px-4 py-2.5 font-medium">Situação</th>
+                  <th className="px-4 py-2.5 text-right font-medium">Valor</th>
+                  <th className="px-4 py-2.5" />
+                </tr>
+              </thead>
+              <tbody>
+                {linhas.map((l) => {
+                  // Situação adaptada ao modelo do app (não "pago/vencido").
+                  const sit =
+                    l.type === "transfer"
+                      ? { label: "Transferência", cls: "bg-surface-muted text-muted-foreground" }
+                      : l.status === "pending"
+                        ? { label: "Previsto", cls: "bg-xp-subtle text-warning" }
+                        : l.status === "reconciled"
+                          ? { label: "Conferido", cls: "bg-income-subtle text-income" }
+                          : { label: "Realizado", cls: "bg-surface-muted text-foreground" };
+                  return (
+                    <tr
+                      key={l.id}
+                      className="border-b border-border last:border-0 hover:bg-surface-muted/40"
+                    >
+                      <td className="whitespace-nowrap px-4 py-3 align-top text-muted-foreground">
+                        {new Date(`${l.date}T12:00:00`).toLocaleDateString("pt-BR", {
+                          day: "2-digit",
+                          month: "short",
+                        })}
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="font-medium">{l.description}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {l.accountName}
+                          {l.categorias.length > 0 && ` · ${l.categorias.join(", ")}`}
+                          {l.qtdRateios > 1 && ` · ${l.qtdRateios} categorias`}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        <span
+                          className={cn(
+                            "inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium",
+                            sit.cls,
+                          )}
+                        >
+                          {sit.label}
+                        </span>
+                      </td>
+                      <td
+                        className={cn(
+                          "tabular whitespace-nowrap px-4 py-3 text-right align-top font-semibold",
+                          l.type === "income" && "text-income",
+                          l.type === "expense" && "text-expense",
+                          l.type === "transfer" && "text-muted-foreground",
+                          l.status === "pending" && "opacity-60",
+                        )}
+                      >
+                        {l.type === "transfer"
+                          ? `${l.amount < 0 ? "−" : "+"} ${formatMoney(Math.abs(l.amount), l.currency)}`
+                          : `${l.type === "expense" ? "−" : "+"} ${formatMoney(l.amount, l.currency)}`}
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        <div className="flex items-center justify-end gap-1">
+                          {l.type === "transfer" ? (
+                            // Aporte/resgate/racha (tocam piscina) se gerenciam no
+                            // Patrimônio/Rachas — sem botão de excluir aqui.
+                            paresPiscina.has(l.transferPairId!) ? null : (
+                              <TransferDeleteButton
+                                pairId={l.transferPairId!}
+                                descricao={l.description}
+                              />
+                            )
+                          ) : (
+                            <>
+                              {l.status === "pending" ? (
+                                <ConfirmButton id={l.id} descricao={l.description} />
+                              ) : (
+                                <ReconcileButton
+                                  id={l.id}
+                                  descricao={l.description}
+                                  conciliado={l.status === "reconciled"}
+                                  previsto={false}
+                                />
+                              )}
+                              <Link
+                                href={`/lancamentos/${l.id}/editar`}
+                                aria-label={`Editar ${l.description}`}
+                                title="Editar"
+                                className="grid size-8 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground"
+                              >
+                                <Pencil className="size-4" />
+                              </Link>
+                              <DeleteButton id={l.id} descricao={l.description} />
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
 
-              {l.qtdRateios > 1 && (
-                <span className="shrink-0 rounded-full bg-primary-subtle px-2 py-0.5 text-[11px] font-medium text-primary-text">
-                  {l.qtdRateios} categorias
-                </span>
-              )}
-
-              <p
-                className={cn(
-                  "tabular shrink-0 font-semibold",
-                  l.type === "income" && "text-income",
-                  l.type === "expense" && "text-expense",
-                  // Transferência é neutra: não é ganho nem perda, só troca de
-                  // lugar. O sinal vem direto do amount (negativo = saiu).
-                  l.type === "transfer" && "text-muted-foreground",
-                  l.status === "pending" && "opacity-60",
-                )}
-              >
-                {l.type === "transfer"
-                  ? `${l.amount < 0 ? "−" : "+"} ${formatMoney(Math.abs(l.amount), l.currency)}`
-                  : `${l.type === "expense" ? "−" : "+"} ${formatMoney(l.amount, l.currency)}`}
-              </p>
-
-              {l.type === "transfer" ? (
-                // Transferência não se edita nem concilia peça a peça: apagar
-                // remove as duas pernas juntas. Exceto aporte/resgate/racha
-                // (tocam piscina): esses se gerenciam no Patrimônio/Rachas, para
-                // não deixar o ativo órfão — aqui não mostramos o botão.
-                paresPiscina.has(l.transferPairId!) ? null : (
-                  <TransferDeleteButton
-                    pairId={l.transferPairId!}
-                    descricao={l.description}
-                  />
-                )
-              ) : (
-                <>
-                  {/* Previsto se confirma; realizado se concilia. São etapas
-                      diferentes da vida do lançamento, e o botão muda junto. */}
-                  {l.status === "pending" ? (
-                    <ConfirmButton id={l.id} descricao={l.description} />
-                  ) : (
-                    <ReconcileButton
-                      id={l.id}
-                      descricao={l.description}
-                      conciliado={l.status === "reconciled"}
-                      previsto={false}
-                    />
-                  )}
-                  <Link
-                    href={`/lancamentos/${l.id}/editar`}
-                    aria-label={`Editar ${l.description}`}
-                    title="Editar"
-                    className="grid size-8 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground"
-                  >
-                    <Pencil className="size-4" />
+          {totalPaginas > 1 && (
+            <div className="flex items-center justify-between gap-2 border-t border-border px-4 py-3">
+              <span className="text-xs text-muted-foreground">
+                {(paginaAtual - 1) * POR_PAGINA + 1}–
+                {Math.min(paginaAtual * POR_PAGINA, totalLinhas)} de {totalLinhas}
+              </span>
+              <div className="flex items-center gap-1">
+                {paginaAtual > 1 ? (
+                  <Link href={url({ pagina: paginaAtual - 1 })} className={buttonClasses("secondary", "sm")}>
+                    ‹ Anterior
                   </Link>
-                  <DeleteButton id={l.id} descricao={l.description} />
-                </>
-              )}
+                ) : (
+                  <span className={buttonClasses("secondary", "sm") + " pointer-events-none opacity-40"}>
+                    ‹ Anterior
+                  </span>
+                )}
+                <span className="px-2 text-xs text-muted-foreground">
+                  {paginaAtual} / {totalPaginas}
+                </span>
+                {paginaAtual < totalPaginas ? (
+                  <Link href={url({ pagina: paginaAtual + 1 })} className={buttonClasses("secondary", "sm")}>
+                    Próxima ›
+                  </Link>
+                ) : (
+                  <span className={buttonClasses("secondary", "sm") + " pointer-events-none opacity-40"}>
+                    Próxima ›
+                  </span>
+                )}
+              </div>
             </div>
-          ))}
+          )}
         </Card>
       )}
     </div>
